@@ -35,7 +35,7 @@ __all__ = [
 from abc import ABC, abstractmethod
 import logging
 import time
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
@@ -87,7 +87,7 @@ class LinearGaussians(pydantic.BaseModel):
         component_mixture: g2f.ComponentMixture,
         channel: g2f.Channel = None,
         is_psf: bool = False,
-    ):
+    ) -> Self:
         """Make a LinearGaussians from a ComponentMixture.
 
         Parameters
@@ -114,7 +114,7 @@ class LinearGaussians(pydantic.BaseModel):
         gaussians_free = []
         gaussians_fixed = []
 
-        for idx, component in enumerate(components):
+        for component in components:
             gaussians: g2.Gaussians = component.gaussians(channel)
             # TODO: Support multi-Gaussian components if sensible
             # The challenge would be in mapping linear param values back onto

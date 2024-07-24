@@ -49,7 +49,7 @@ frozen_arbitrary_allowed_config = pydantic.ConfigDict(
 )
 
 
-def get_params_uniq(parametric: g2f.Parametric, **kwargs: Any):
+def get_params_uniq(parametric: g2f.Parametric, **kwargs: Any) -> list[g2f.ParameterD]:
     """Get a sorted set of parameters matching a filter.
 
     Parameters
@@ -70,7 +70,7 @@ def get_params_uniq(parametric: g2f.Parametric, **kwargs: Any):
     return g2f.params_unique(params)
 
 
-def normalize(ndarray: numpy.ndarray, return_sum: bool = False):
+def normalize(ndarray: numpy.ndarray, return_sum: bool = False) -> np.ndarray | tuple[np.ndarray, float]:
     """Normalize a numpy array.
 
     Parameters
