@@ -31,7 +31,7 @@ __all__ = [
 
 from functools import cached_property
 import logging
-from typing import Any, Mapping, Sequence
+from typing import Any, ClassVar, Mapping, Sequence
 
 import astropy
 import lsst.gauss2d.fit as g2f
@@ -104,7 +104,7 @@ class CatalogSourceBootstrapConfig(CatalogBootstrapConfig):
 class CatalogExposurePsfBootstrap(CatalogExposurePsfABC, CatalogPsfFitterConfigData, pydantic.BaseModel):
     """Dataclass for a PSF-convolved bootstrap fitter."""
 
-    model_config = frozen_arbitrary_allowed_config
+    model_config: ClassVar[pydantic.ConfigDict] = frozen_arbitrary_allowed_config
 
     config_boot: CatalogPsfBootstrapConfig = pydantic.Field(title="The configuration for bootstrapping")
 
@@ -142,7 +142,7 @@ class CatalogExposurePsfBootstrap(CatalogExposurePsfABC, CatalogPsfFitterConfigD
 class CatalogExposureSourcesBootstrap(CatalogExposureSourcesABC, pydantic.BaseModel):
     """A CatalogExposure for bootstrap fitting of source catalogs."""
 
-    model_config = frozen_arbitrary_allowed_config
+    model_config: ClassVar[pydantic.ConfigDict] = frozen_arbitrary_allowed_config
 
     config_boot: CatalogSourceBootstrapConfig = pydantic.Field(
         title="A CatalogSourceBootstrapConfig to be frozen"
@@ -182,7 +182,7 @@ class CatalogSourceFitterBootstrap(CatalogSourceFitterABC, pydantic.BaseModel):
     statistics of the best-fit parameters.
     """
 
-    model_config = frozen_arbitrary_allowed_config
+    model_config: ClassVar[pydantic.ConfigDict] = frozen_arbitrary_allowed_config
 
     def get_model_radec(self, source: Mapping[str, Any], cen_x: float, cen_y: float) -> tuple[float, float]:
         return float(cen_x), float(cen_y)

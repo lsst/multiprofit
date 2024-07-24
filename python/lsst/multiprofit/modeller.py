@@ -35,7 +35,7 @@ __all__ = [
 from abc import ABC, abstractmethod
 import logging
 import time
-from typing import Any
+from typing import Any, ClassVar
 
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
@@ -75,7 +75,7 @@ if has_fastnnls:
 class LinearGaussians(pydantic.BaseModel):
     """Helper for linear least-squares fitting of Gaussian mixtures."""
 
-    model_config = frozen_arbitrary_allowed_config
+    model_config: ClassVar[pydantic.ConfigDict] = frozen_arbitrary_allowed_config
 
     gaussians_fixed: g2.Gaussians = pydantic.Field(title="Fixed Gaussian components")
     gaussians_free: tuple[tuple[g2.Gaussians, g2f.ParameterD], ...] = pydantic.Field(
@@ -172,7 +172,7 @@ class FitInputsDummy(FitInputsBase):
 class FitInputs(FitInputsBase, pydantic.BaseModel):
     """Model fit inputs for gauss2dfit."""
 
-    model_config = arbitrary_allowed_config
+    model_config: ClassVar[pydantic.ConfigDict] = arbitrary_allowed_config
 
     jacobian: np.ndarray = pydantic.Field(None, title="The full Jacobian array")
     jacobians: list[list[g2.ImageD]] = pydantic.Field(
@@ -347,7 +347,7 @@ class ModelFitConfig(pexConfig.Config):
 class FitResult(pydantic.BaseModel):
     """Results from a Modeller fit, including metadata."""
 
-    model_config = arbitrary_allowed_config
+    model_config: ClassVar[pydantic.ConfigDict] = arbitrary_allowed_config
 
     # TODO: Why does setting default=ModelFitConfig() cause a circular import?
     config: ModelFitConfig = pydantic.Field(None, title="The configuration for fitting")

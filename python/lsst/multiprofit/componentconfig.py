@@ -33,6 +33,7 @@ __all__ = [
 ]
 
 import string
+from typing import ClassVar
 
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig
@@ -94,7 +95,7 @@ class CentroidConfig(pexConfig.Config):
 class ComponentData(pydantic.BaseModel):
     """Dataclass for a Component config."""
 
-    model_config = frozen_arbitrary_allowed_config
+    model_config: ClassVar[pydantic.ConfigDict] = frozen_arbitrary_allowed_config
 
     component: g2f.Component = pydantic.Field(title="The component instance")
     integral_model: g2f.IntegralModel = pydantic.Field(title="The component's integral_model")

@@ -30,7 +30,7 @@ from abc import abstractmethod
 from functools import cached_property
 import logging
 import time
-from typing import Any, Mapping, Type
+from typing import Any, ClassVar, Mapping, Type
 import warnings
 
 import astropy
@@ -169,7 +169,7 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
     ensure that the model remains unchanged.
     """
 
-    model_config = frozen_arbitrary_allowed_config
+    model_config: ClassVar[pydantic.ConfigDict] = frozen_arbitrary_allowed_config
 
     config: CatalogPsfFitterConfig = pydantic.Field(title="A CatalogPsfFitterConfig to be frozen")
 

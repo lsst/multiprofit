@@ -23,7 +23,7 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 import logging
 import time
-from typing import Any, Iterable, Mapping, Sequence, Type
+from typing import Any, ClassVar, Iterable, Mapping, Sequence, Type
 
 import astropy
 from astropy.table import Table
@@ -262,7 +262,7 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
     ensure that the model remains unchanged.
     """
 
-    model_config = frozen_arbitrary_allowed_config
+    model_config: ClassVar[pydantic.ConfigDict] = frozen_arbitrary_allowed_config
 
     channels: list[g2f.Channel] = pydantic.Field(title="The list of channels")
     config: CatalogSourceFitterConfig = pydantic.Field(title="A CatalogSourceFitterConfig to be frozen")
@@ -338,7 +338,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
     generic unknown_flag failure column.
     """
 
-    model_config = frozen_arbitrary_allowed_config
+    model_config: ClassVar[pydantic.ConfigDict] = frozen_arbitrary_allowed_config
 
     errors_expected: dict[Type[Exception], str] = pydantic.Field(
         default_factory=dict,

@@ -23,6 +23,7 @@ __all__ = ["CatalogExposureABC", "ColumnInfo", "CatalogFitterConfig"]
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
+from typing import ClassVar
 
 import astropy.units as u
 import lsst.pex.config as pexConfig
@@ -45,7 +46,7 @@ class CatalogExposureABC(ABC):
 class ColumnInfo(pydantic.BaseModel):
     """Metadata for a column in a catalog."""
 
-    model_config = frozen_arbitrary_allowed_config
+    model_config: ClassVar[pydantic.ConfigDict] = frozen_arbitrary_allowed_config
 
     dtype: str = pydantic.Field(title="Column data type name (numpy or otherwise)")
     key: str = pydantic.Field(title="Column key (name)")
