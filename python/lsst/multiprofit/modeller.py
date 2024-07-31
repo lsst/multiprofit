@@ -206,7 +206,8 @@ class FitInputs(FitInputsBase, pydantic.BaseModel):
         n_prior_residuals = sum(len(p) for p in priors)
         params_free = tuple(get_params_uniq(model, fixed=False))
         n_params_free = len(params_free)
-        # There's one extra validation array
+        # gauss2d_fit reserves the zeroth index of the jacobian array for
+        # validation, i.e. it can be used to dump terms for fixed params
         n_params_jac = n_params_free + 1
         if not (n_params_jac > 1):
             raise ValueError("Can't fit model with no free parameters")
@@ -218,6 +219,7 @@ class FitInputs(FitInputsBase, pydantic.BaseModel):
         for idx_obs in range(n_obs):
             observation = model.data[idx_obs]
             shapes[idx_obs, :] = (observation.image.n_rows, observation.image.n_cols)
+            # Get the free parameter indices for each observation
             params = tuple(get_params_uniq(model, fixed=False, channel=observation.channel))
             n_params_obs = len(params)
             ranges_params_obs = [0] * (n_params_obs + 1)
@@ -226,6 +228,9 @@ class FitInputs(FitInputsBase, pydantic.BaseModel):
             ranges_params[idx_obs] = ranges_params_obs
 
         n_free_first = len(ranges_params[0])
+        # Ensure that there are the same number of free parameters in each obs
+        # They don't need to be the same set, but the counts should equal
+        # (this assumption may be violated by future IntegralModels - TBD)
         assert all([len(rp) == n_free_first for rp in ranges_params[1:]])
 
         return n_obs, n_params_jac, n_prior_residuals, shapes
