@@ -248,19 +248,21 @@ class FitInputs(FitInputsBase, pydantic.BaseModel):
             The model to initialize arrays for.
         """
         n_obs, n_params_jac, n_prior_residuals, shapes = cls.get_sizes(model)
-        n_data_obs = np.cumsum(np.prod(shapes, axis=1))
-        n_data = n_data_obs[-1]
-        size_data = n_data + n_prior_residuals
+        n_pixels_cumsum = np.cumsum(np.prod(shapes, axis=1))
+        n_pixels_total = n_pixels_cumsum[-1]
+        size_data = n_pixels_total + n_prior_residuals
         shape_jacobian = (size_data, n_params_jac)
         jacobian = np.zeros(shape_jacobian)
         jacobians = [None] * n_obs
         outputs_prior = [None] * n_params_jac
         for idx in range(n_params_jac):
-            outputs_prior[idx] = g2.ImageD(jacobian[n_data:, idx].view().reshape((1, n_prior_residuals)))
+            outputs_prior[idx] = g2.ImageD(
+                jacobian[n_pixels_total:, idx].view().reshape((1, n_prior_residuals))
+            )
 
         residual = np.zeros(size_data)
         residuals = [None] * n_obs
-        residuals_prior = g2.ImageD(residual[n_data:].reshape(1, n_prior_residuals))
+        residuals_prior = g2.ImageD(residual[n_pixels_total:].reshape(1, n_prior_residuals))
 
         offset = 0
         for idx_obs in range(n_obs):
@@ -273,8 +275,8 @@ class FitInputs(FitInputsBase, pydantic.BaseModel):
             jacobians[idx_obs] = jacobians_obs
             residuals[idx_obs] = g2.ImageD(residual[offset:end].view().reshape(shape))
             offset = end
-            if offset != n_data_obs[idx_obs]:
-                raise RuntimeError(f"Assigned {offset=} data points != {n_data_obs[idx_obs]=}")
+            if offset != n_pixels_cumsum[idx_obs]:
+                raise RuntimeError(f"Assigned {offset=} data points != {n_pixels_cumsum[idx_obs]=}")
         return cls(
             jacobian=jacobian,
             jacobians=jacobians,
@@ -286,8 +288,8 @@ class FitInputs(FitInputsBase, pydantic.BaseModel):
 
     def validate_for_model(self, model: Model) -> list[str]:
         n_obs, n_params_jac, n_prior_residuals, shapes = self.get_sizes(model)
-        n_data = np.sum(np.prod(shapes, axis=1))
-        size_data = n_data + n_prior_residuals
+        n_pixels_total = np.sum(np.prod(shapes, axis=1))
+        size_data = n_pixels_total + n_prior_residuals
         shape_jacobian = (size_data, n_params_jac)
 
         errors = []
