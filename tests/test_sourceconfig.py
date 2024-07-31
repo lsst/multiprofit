@@ -34,7 +34,7 @@ import pytest
 
 @pytest.fixture(scope="module")
 def centroid_limits():
-    limits = g2f.LimitsD(min=-np.Inf, max=np.Inf)
+    limits = g2f.LimitsD(min=-np.inf, max=np.inf)
     return limits
 
 

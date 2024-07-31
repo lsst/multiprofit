@@ -65,7 +65,7 @@ class InvalidProposalError(ValueError):
 
 fitmethods_linear = {
     "scipy.optimize.nnls": {},
-    "scipy.optimize.lsq_linear": {"bounds": (1e-5, np.Inf), "method": "bvls"},
+    "scipy.optimize.lsq_linear": {"bounds": (1e-5, np.inf), "method": "bvls"},
     "numpy.linalg.lstsq": {"rcond": 1e-3},
 }
 if has_fastnnls:
@@ -781,7 +781,7 @@ class Modeller:
             if not (value > parameter.limits.min):
                 value = parameter.limits.min + (
                     1e-5
-                    if (parameter.limits.max == np.Inf)
+                    if (parameter.limits.max == np.inf)
                     else (0.02 * (parameter.limits.max - parameter.limits.min))
                 )
             elif not (value < parameter.limits.max):

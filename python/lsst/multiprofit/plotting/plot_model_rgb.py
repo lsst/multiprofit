@@ -141,7 +141,7 @@ def plot_model_rgb(
         for band in bands:
             observations[band] = obs_kwarg[band]
 
-    x_min, x_max, y_min, y_max = np.Inf, -np.Inf, np.Inf, -np.Inf
+    x_min, x_max, y_min, y_max = np.inf, -np.inf, np.inf, -np.inf
     coordsys_last = None
     if has_model and n_data >= 3:
         for obs, output in zip(model.data, model.outputs):

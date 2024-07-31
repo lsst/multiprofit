@@ -197,8 +197,8 @@ class CatalogSourceFitterBootstrap(CatalogSourceFitterABC, pydantic.BaseModel):
     ):
         if values_init is None:
             values_init = {}
-        min_x, max_x = np.Inf, -np.Inf
-        min_y, max_y = np.Inf, -np.Inf
+        min_x, max_x = np.inf, -np.inf
+        min_y, max_y = np.inf, -np.inf
         for idx_obs, observation in enumerate(model.data):
             x_min = observation.image.coordsys.x_min
             min_x = min(min_x, x_min)
@@ -221,7 +221,7 @@ class CatalogSourceFitterBootstrap(CatalogSourceFitterABC, pydantic.BaseModel):
             if value_init is not None:
                 param.value = value_init
             if limits_new:
-                param.limits.min = -np.Inf
+                param.limits.min = -np.inf
                 param.limits.max = limits_new[1]
                 param.limits.min = limits_new[0]
 
