@@ -34,8 +34,14 @@ __all__ = [
 
 from abc import ABC, abstractmethod
 import logging
+import sys
 import time
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar
+if sys.version_info >= (3, 11, 0):
+    from typing import Self
+else:
+    from typing import TypeVar
+    Self = TypeVar("Self", bound="_BaseModelCompat")  # type: ignore
 
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
