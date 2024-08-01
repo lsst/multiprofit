@@ -448,21 +448,21 @@ class Modeller:
 
         Parameters
         ----------
-        gaussians_linear : LinearGaussians
+        gaussians_linear
             The Gaussian components - fixed or otherwise - to fit.
-        observation : gauss2d.fit.Observation
+        observation
             The observation to fit against.
-        psf_model : gauss2d.fit.PsfModel
+        psf_model
             A PSF model for the observation, if fitting sources.
-        fitmethods : dict[str, dict[str, Any]]
+        fitmethods
             A dictionary of fitting methods to employ, keyed by method name,
             with a value of a dict of options (kwargs) to pass on.
-        plot : bool
+        plot
             Whether to generate fit residual/diagnostic plots.
 
         Returns
         -------
-        results : dict[str, FitResult]
+        results
             Fit results for each method, keyed by the fit method name.
         """
         if psf_model is None:
@@ -569,20 +569,20 @@ class Modeller:
 
         Parameters
         ----------
-        model : `gauss2d.fit.Model`
+        model
             The model to fit.
-        fitinputs : `FitInputs`
+        fitinputs
             An existing FitInputs with jacobian/residual arrays to reuse.
-        printout : bool
+        printout
             Whether to print diagnostic information.
-        config : ModelFitConfig
+        config
             Configuration settings for model fitting.
         **kwargs
             Keyword arguments to pass to the optimizer.
 
         Returns
         -------
-        result : FitResult
+        result
             The results from running the fitter.
 
         Notes
@@ -829,12 +829,12 @@ class Modeller:
 
         Parameters
         ----------
-        component_mixture : `gauss2d.fit.ComponentMixture`
+        component_mixture
             A component mixture to create a component list for.
 
         Returns
         -------
-        gaussians : `list[gauss2d.fit.GaussianComponent]`
+        gaussians
             A list of Gaussians components with fixed parameters and values
             matching those in the original component mixture.
         """
