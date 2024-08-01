@@ -35,7 +35,7 @@ from lsst.multiprofit.componentconfig import (
 )
 from lsst.multiprofit.model_utils import make_image_gaussians, make_psf_model_null
 from lsst.multiprofit.modelconfig import ModelConfig
-from lsst.multiprofit.modeller import FitInputs, LinearGaussians, Modeller, fitmethods_linear
+from lsst.multiprofit.modeller import FitInputs, LinearGaussians, Modeller, fit_methods_linear
 from lsst.multiprofit.observationconfig import CoordinateSystemConfig, ObservationConfig
 from lsst.multiprofit.sourceconfig import ComponentGroupConfig, SourceConfig
 from lsst.multiprofit.utils import get_params_uniq
@@ -499,7 +499,7 @@ def test_psf_models_linear_gaussians(data, psf_models_linear_gaussians, psf_obse
         results[idx] = Modeller.fit_gaussians_linear(
             gaussians_linear=gaussians_linear,
             observation=observation_psf,
-            fitmethods=fitmethods_linear,
+            fit_methods=fit_methods_linear,
             plot=False,
         )
         assert len(results[idx]) > 0

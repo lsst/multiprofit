@@ -21,7 +21,7 @@
 
 __all__ = [
     "InvalidProposalError",
-    "fitmethods_linear",
+    "fit_methods_linear",
     "LinearGaussians",
     "make_image_gaussians",
     "make_psf_model_null",
@@ -69,13 +69,13 @@ class InvalidProposalError(ValueError):
     """Error for an invalid parameter proposal."""
 
 
-fitmethods_linear = {
+fit_methods_linear = {
     "scipy.optimize.nnls": {},
     "scipy.optimize.lsq_linear": {"bounds": (1e-5, np.inf), "method": "bvls"},
     "numpy.linalg.lstsq": {"rcond": 1e-3},
 }
 if has_fastnnls:
-    fitmethods_linear["fastnnls.fnnls"] = {}
+    fit_methods_linear["fastnnls.fnnls"] = {}
 
 
 class LinearGaussians(pydantic.BaseModel):
@@ -441,7 +441,7 @@ class Modeller:
         gaussians_linear: LinearGaussians,
         observation: g2f.ObservationD,
         psf_model: g2f.PsfModel = None,
-        fitmethods: dict[str, dict[str, Any]] | None = None,
+        fit_methods: dict[str, dict[str, Any]] | None = None,
         plot: bool = False,
     ) -> dict[str, FitResult]:
         """Fit normalizations for a Gaussian mixture model.
@@ -454,7 +454,7 @@ class Modeller:
             The observation to fit against.
         psf_model
             A PSF model for the observation, if fitting sources.
-        fitmethods
+        fit_methods
             A dictionary of fitting methods to employ, keyed by method name,
             with a value of a dict of options (kwargs) to pass on. Default
             is "scipy.optimize.nnls".
@@ -468,12 +468,12 @@ class Modeller:
         """
         if psf_model is None:
             psf_model = make_psf_model_null()
-        if fitmethods is None:
-            fitmethods = {"scipy.optimize.nnls": fitmethods_linear["scipy.optimize.nnls"]}
+        if fit_methods is None:
+            fit_methods = {"scipy.optimize.nnls": fit_methods_linear["scipy.optimize.nnls"]}
         else:
-            for fitmethod in fitmethods:
-                if fitmethod not in fitmethods_linear:
-                    raise ValueError(f"Unknown linear {fitmethod=}")
+            for fit_method in fit_methods:
+                if fit_method not in fit_methods_linear:
+                    raise ValueError(f"Unknown linear {fit_method=}")
         n_params = len(gaussians_linear.gaussians_free)
         if not (n_params > 0):
             raise ValueError(f"!({len(gaussians_linear.gaussians_free)=}>0); can't fit with no free params")
@@ -539,23 +539,23 @@ class Modeller:
 
         results = {}
 
-        for fitmethod, kwargs in fitmethods.items():
-            if fitmethod == "scipy.optimize.nnls":
+        for fit_method, kwargs in fit_methods.items():
+            if fit_method == "scipy.optimize.nnls":
                 values = spopt.nnls(x, y)[0]
-            elif fitmethod == "scipy.optimize.lsq_linear":
-                kwargs = kwargs if kwargs is not None else fitmethods_linear[fitmethod]
+            elif fit_method == "scipy.optimize.lsq_linear":
+                kwargs = kwargs if kwargs is not None else fit_methods_linear[fit_method]
                 values = spopt.lsq_linear(x, y, **kwargs).x
-            elif fitmethod == "numpy.linalg.lstsq":
+            elif fit_method == "numpy.linalg.lstsq":
                 values = np.linalg.lstsq(x, y, **kwargs)[0]
-            elif fitmethod == "fastnnls.fnnls":
+            elif fit_method == "fastnnls.fnnls":
                 from fastnnls import fnnls
 
                 y = x.T.dot(y)
                 x = x.T.dot(x)
                 values = fnnls(x, y)
             else:
-                raise RuntimeError(f"Unknown linear {fitmethod=} not caught earlier (logic error)")
-            results[fitmethod] = values
+                raise RuntimeError(f"Unknown linear {fit_method=} not caught earlier (logic error)")
+            results[fit_method] = values
         return results
 
     def fit_model(
