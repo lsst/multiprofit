@@ -288,7 +288,7 @@ class FitInputs(FitInputsBase, pydantic.BaseModel):
             jacobians=jacobians,
             residual=residual,
             residuals=residuals,
-            outputs_prior=outputs_prior,
+            outputs_prior=tuple(outputs_prior),
             residuals_prior=residuals_prior,
         )
 
