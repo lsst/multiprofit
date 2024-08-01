@@ -408,6 +408,24 @@ class Modeller:
 
     @staticmethod
     def compute_variances(model: Model, use_diag_only: bool = False, use_svd: bool = False, **kwargs):
+        """Compute model free parameter variances from the inverse Hessian.
+
+        Parameters
+        ----------
+        model
+            The model to compute parameter variances for.
+        use_diag_only
+            Whether to use diagonal terms only, i.e. ignore covariance.
+        use_svd
+            Whether to use singular value decomposition to compute the inverse Hessian.
+        kwargs
+            Additional keyword arguments to pass to model.compute_hessian.
+
+        Returns
+        -------
+        variances
+            The free parameter variances.
+        """
         hessian = model.compute_hessian(**kwargs).data
         if use_diag_only:
             return -1 / np.diag(hessian)
