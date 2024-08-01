@@ -456,7 +456,8 @@ class Modeller:
             A PSF model for the observation, if fitting sources.
         fitmethods
             A dictionary of fitting methods to employ, keyed by method name,
-            with a value of a dict of options (kwargs) to pass on.
+            with a value of a dict of options (kwargs) to pass on. Default
+            is "scipy.optimize.nnls".
         plot
             Whether to generate fit residual/diagnostic plots.
 
