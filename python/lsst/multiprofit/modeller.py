@@ -441,7 +441,7 @@ class Modeller:
         gaussians_linear: LinearGaussians,
         observation: g2f.ObservationD,
         psf_model: g2f.PsfModel = None,
-        fitmethods: dict[str, dict[str, Any]] = None,
+        fitmethods: dict[str, dict[str, Any]] | None = None,
         plot: bool = False,
     ) -> dict[str, FitResult]:
         """Fit normalizations for a Gaussian mixture model.
