@@ -263,7 +263,7 @@ class FitInputs(FitInputsBase, pydantic.BaseModel):
         outputs_prior = [None] * n_params_jac
         for idx in range(n_params_jac):
             outputs_prior[idx] = g2.ImageD(
-                jacobian[n_pixels_total:, idx].view().reshape((1, n_prior_residuals))
+                jacobian[n_pixels_total:, idx].reshape((1, n_prior_residuals))
             )
 
         residual = np.zeros(size_data)
@@ -277,9 +277,9 @@ class FitInputs(FitInputsBase, pydantic.BaseModel):
             end = offset + size_obs
             jacobians_obs = [None] * n_params_jac
             for idx_jac in range(n_params_jac):
-                jacobians_obs[idx_jac] = g2.ImageD(jacobian[offset:end, idx_jac].view().reshape(shape))
+                jacobians_obs[idx_jac] = g2.ImageD(jacobian[offset:end, idx_jac].reshape(shape))
             jacobians[idx_obs] = jacobians_obs
-            residuals[idx_obs] = g2.ImageD(residual[offset:end].view().reshape(shape))
+            residuals[idx_obs] = g2.ImageD(residual[offset:end].reshape(shape))
             offset = end
             if offset != n_pixels_cumsum[idx_obs]:
                 raise RuntimeError(f"Assigned {offset=} data points != {n_pixels_cumsum[idx_obs]=}")
