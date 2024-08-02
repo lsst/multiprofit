@@ -588,7 +588,14 @@ class Modeller:
                 newline = "\n"
                 raise ValueError(f"fitinputs validation got errors:\n{newline.join(errors)}")
 
-        def residual_func(params_new, model_jac, model_ll, params, result, jac):
+        def residual_func(
+            params_new,
+            model_jac: Model,
+            model_ll: Model,
+            params: tuple[tuple[int, g2f.ParameterD]],
+            result: FitResult,
+            jac: np.ndarray,
+        ):
             if not all(~np.isnan(params_new)):
                 raise InvalidProposalError(f"optimizer for {model_ll=} proposed non-finite {params_new=}")
             try:
