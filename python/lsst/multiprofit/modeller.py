@@ -36,7 +36,7 @@ from abc import ABC, abstractmethod
 import logging
 import sys
 import time
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Iterable
 if sys.version_info >= (3, 11, 0):
     from typing import Self
 else:
@@ -773,10 +773,33 @@ class Modeller:
     def fit_model_linear(
         cls,
         model: Model,
-        idx_obs: int = None,
+        idx_obs: int | Iterable[int] | None = None,
         ratio_min: float = 0,
         validate: bool = False,
     ) -> tuple[np.ndarray, np.ndarray]:
+        """Fit a model's linear parameters (integrals).
+        
+        Parameters
+        ----------
+        model
+            The model to fit parameters for.
+        idx_obs
+            An index or iterable of indices of observations to fit.
+            The default is to fit all observations.
+        ratio_min
+            The minimum ratio of the previous value to set any parameter to.
+            This can prevent setting parameters to zero.
+        validate
+            If True, check that the model log-likelihood improves and restore
+            the original parameter values if not.
+
+        Returns
+        -------
+        loglike_init
+            The initial log likelihood if validate is True, otherwise None.
+        loglike_final
+            The post-fit log likelihood if validate is True, otherwise None.
+        """
         n_data = len(model.data)
         n_sources = len(model.sources)
         if n_sources != 1:
