@@ -74,7 +74,7 @@ class FluxFractionParameterConfig(ParameterConfig):
 
     def setDefaults(self):
         super().setDefaults()
-        self.value_initial = 1.0
+        self.value_initial = 0.5
 
 
 class CentroidConfig(pexConfig.Config):
