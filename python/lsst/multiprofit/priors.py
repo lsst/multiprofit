@@ -49,6 +49,18 @@ class ShapePriorConfig(pexConfig.Config):
     )
 
     def get_shape_prior(self, ellipse: g2f.ParametricEllipse) -> g2f.ShapePrior | None:
+        """Make a prior on ellipse (shape) parameters.
+
+        Parameters
+        ----------
+        ellipse
+            The ellipse to make a prior for.
+
+        Returns
+        -------
+        prior
+            The prior, or None if no positive stddev configured.
+        """
         use_prior_axrat = (self.prior_axrat_stddev > 0) and np.isfinite(self.prior_axrat_stddev)
         use_prior_size = (self.prior_size_stddev > 0) and np.isfinite(self.prior_size_stddev)
 
