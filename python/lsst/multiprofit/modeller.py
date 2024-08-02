@@ -400,10 +400,7 @@ class Modeller:
 
     @staticmethod
     def _get_logger():
-        logging.basicConfig()
         logger = logging.getLogger(__name__)
-        logger.level = logging.INFO
-
         return logger
 
     @staticmethod
@@ -485,18 +482,11 @@ class Modeller:
         sigma_inv = observation.sigma_inv.data
         bad = ~(sigma_inv > 0)
         n_bad = np.sum(bad)
-        mask_init_is_None = mask_inv is None
+        if n_bad > 0:
+            mask_inv &= ~bad
 
-        if mask_init_is_None is None and (n_bad > 0):
-            mask_inv = ~bad
-
-        if mask_inv is None:
-            size = np.prod(shape)
-        else:
-            if not mask_init_is_None:
-                mask_inv &= ~bad
-            sigma_inv = sigma_inv[mask_inv]
-            size = np.sum(mask_inv)
+        sigma_inv = sigma_inv[mask_inv]
+        size = np.sum(mask_inv)
 
         gaussians_psf = psf_model.gaussians(g2f.Channel.NONE)
         if len(gaussians_linear.gaussians_fixed) > 0:
@@ -506,8 +496,7 @@ class Modeller:
                 n_rows=shape[0],
                 n_cols=shape[1],
             ).data
-            if mask_inv is not None:
-                image_fixed = image_fixed[mask_inv]
+            image_fixed = image_fixed[mask_inv]
         else:
             image_fixed = None
 
