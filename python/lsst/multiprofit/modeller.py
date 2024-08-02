@@ -589,7 +589,7 @@ class Modeller:
                 raise ValueError(f"fitinputs validation got errors:\n{newline.join(errors)}")
 
         def residual_func(
-            params_new,
+            params_new: np.ndarray,
             model_jac: Model,
             model_ll: Model,
             params: tuple[tuple[int, g2f.ParameterD]],
@@ -624,7 +624,14 @@ class Modeller:
             result.time_eval += time.process_time() - time_init
             return -result.inputs.residual
 
-        def jacobian_func(params_new, model_jac, model_ll, params, result, jac):
+        def jacobian_func(
+                params_new: np.ndarray,
+                model_jac: Model,
+                model_ll: Model,
+                params: tuple[tuple[int, g2f.ParameterD]],
+                result: FitResult,
+                jac: np.ndarray,
+        ):
             # If False, the Jacobian should already have been computed by a
             # call to residual_func.
             if result.config.eval_residual:
