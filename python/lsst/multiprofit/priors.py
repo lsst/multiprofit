@@ -85,7 +85,7 @@ class ShapePriorConfig(pexConfig.Config):
         return None
 
 
-def get_hst_size_prior(mag_psf_i):
+def get_hst_size_prior(mag_psf_i: float) -> float:
     """Return the mean and stddev for an HST-based size prior.
 
     The size is major axis half-light radius.
