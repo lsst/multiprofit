@@ -591,32 +591,32 @@ class Modeller:
         def residual_func(
             params_new: np.ndarray,
             model_jac: Model,
-            model_ll: Model,
+            model_loglike: Model,
             params: tuple[tuple[int, g2f.ParameterD]],
             result: FitResult,
             jac: np.ndarray,
         ):
             if not all(~np.isnan(params_new)):
-                raise InvalidProposalError(f"optimizer for {model_ll=} proposed non-finite {params_new=}")
+                raise InvalidProposalError(f"optimizer for {model_loglike=} proposed non-finite {params_new=}")
             try:
                 for param, value in zip(params, params_new):
                     param.value_transformed = value
                     if not np.isfinite(param.value):
                         raise RuntimeError(f"{param=} set to (transformed) non-finite {value=}")
             except RuntimeError as e:
-                raise InvalidProposalError(f"optimizer for {model_ll=} proposal generated error={e}")
+                raise InvalidProposalError(f"optimizer for {model_loglike=} proposal generated error={e}")
             config_fit = result.config
             fit_linear_iter = config_fit.fit_linear_iter
             if (fit_linear_iter > 0) and ((result.n_eval_resid + 1) % fit_linear_iter == 0):
-                self.fit_model_linear(model_ll, ratio_min=1e-6)
+                self.fit_model_linear(model_loglike, ratio_min=1e-6)
             time_init = time.process_time()
 
             # If eval_residual is true, the user thinks it's likely that the
             # optimizer will choose not to evaluate the Jacobian in some
             # iterations. If False, evaluate the Jacobian now, which will
-            # also fill in the residual array, and avoid the model_ll.evaluate
+            # also fill in the residual array, and avoid the model_loglike.evaluate
             if config_fit.eval_residual:
-                model_ll.evaluate()
+                model_loglike.evaluate()
                 result.n_eval_resid += 1
             else:
                 model_jac.evaluate()
@@ -627,7 +627,7 @@ class Modeller:
         def jacobian_func(
                 params_new: np.ndarray,
                 model_jac: Model,
-                model_ll: Model,
+                model_loglike: Model,
                 params: tuple[tuple[int, g2f.ParameterD]],
                 result: FitResult,
                 jac: np.ndarray,
@@ -642,19 +642,19 @@ class Modeller:
             return jac
 
         if config.eval_residual:
-            model_ll = g2f.ModelD(
+            model_loglike = g2f.ModelD(
                 data=model.data,
                 psfmodels=model.psfmodels,
                 sources=model.sources,
                 priors=model.priors,
             )
-            model_ll.setup_evaluators(
+            model_loglike.setup_evaluators(
                 evaluatormode=g2f.EvaluatorMode.loglike,
                 residuals=fitinputs.residuals,
                 residuals_prior=fitinputs.residuals_prior,
             )
         else:
-            model_ll = None
+            model_loglike = None
 
         model.setup_evaluators(
             evaluatormode=g2f.EvaluatorMode.jacobian,
@@ -688,7 +688,7 @@ class Modeller:
 
         if params_free_sorted_missing:
             if config.eval_residual:
-                model_ll.setup_evaluators(
+                model_loglike.setup_evaluators(
                     evaluatormode=g2f.EvaluatorMode.loglike,
                     residuals=fitinputs.residuals,
                     residuals_prior=fitinputs.residuals_prior,
@@ -744,7 +744,7 @@ class Modeller:
             params_init,
             jac=jacobian_func,
             bounds=bounds,
-            args=(model, model_ll, params_free, results, jac),
+            args=(model, model_loglike, params_free, results, jac),
             x_scale=x_scale_jac_clipped,
             **kwargs,
         )
