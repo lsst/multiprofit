@@ -41,8 +41,8 @@ def make_image_gaussians(
     gaussians_kernel
         Gaussians representing the smoothing kernel.
     **kwargs
-        Additional keyword arguments to pass to gauss2d.make_gaussians_pixel_D
-        (i.e. image size, etc.).
+        Additional keyword arguments to pass to
+        lsst.gauss2d.make_gaussians_pixel_D (i.e. image size, etc.).
 
     Returns
     -------
