@@ -342,12 +342,13 @@ class ModelFitConfig(pexConfig.Config):
 
     eval_residual = pexConfig.Field[bool](
         doc="Whether to evaluate the residual every iteration before the Jacobian, which can improve "
-        "performance if most steps do not call the Jacobian function",
+            "performance if most steps do not call the Jacobian function. Must be set to True if the "
+            "optimizer does not always evaluate the residual first, before the Jacobian.",
         default=True,
     )
     fit_linear_iter = pexConfig.Field[int](
         doc="The number of iterations to wait before performing a linear fit during optimization."
-        " Default 0 disables the feature.",
+            " Default 0 disables the feature.",
         default=0,
     )
 
@@ -602,6 +603,11 @@ class Modeller:
             if (fit_linear_iter > 0) and ((result.n_eval_resid + 1) % fit_linear_iter == 0):
                 self.fit_model_linear(model_ll, ratio_min=1e-6)
             time_init = time.process_time()
+
+            # If eval_residual is true, the user thinks it's likely that the
+            # optimizer will choose not to evaluate the Jacobian in some
+            # iterations. If False, evaluate the Jacobian now, which will
+            # also fill in the residual array, and avoid the model_ll.evaluate
             if config_fit.eval_residual:
                 model_ll.evaluate()
                 result.n_eval_resid += 1
@@ -612,6 +618,8 @@ class Modeller:
             return -result.inputs.residual
 
         def jacobian_func(params_new, model_jac, model_ll, params, result, jac):
+            # If False, the Jacobian should already have been computed by a
+            # call to residual_func.
             if result.config.eval_residual:
                 time_init = time.process_time()
                 model_jac.evaluate()
