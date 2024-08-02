@@ -10,7 +10,6 @@ from .modelconfig import *
 from .modeller import *
 from .observationconfig import *
 from .priors import *
-from .psfmodel_utils import *
 from .sourceconfig import *
 from .transforms import *
 from .utils import *
