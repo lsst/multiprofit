@@ -328,7 +328,7 @@ class GaussianComponentConfig(EllipticalComponentConfig):
         integral_model: g2f.IntegralModel,
     ) -> ComponentData:
         ellipse = self.make_gaussianparametricellipse()
-        prior = self.get_shape_prior(ellipse)
+        prior = self.make_shape_prior(ellipse)
         component_data = ComponentData(
             component=g2f.GaussianComponent(
                 centroid=centroid,
@@ -457,7 +457,7 @@ class SersicComponentConfig(EllipticalComponentConfig):
             )
             prior = self.sersic_index.get_prior(sersic_index) if not sersic_index.fixed else None
             priors = [prior] if prior else []
-        prior = self.get_shape_prior(ellipse)
+        prior = self.make_shape_prior(ellipse)
         if prior:
             priors.append(prior)
         return ComponentData(

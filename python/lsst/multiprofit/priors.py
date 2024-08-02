@@ -48,7 +48,7 @@ class ShapePriorConfig(pexConfig.Config):
         doc="Prior std. dev. on size_major (prior ignored if not >0)",
     )
 
-    def get_shape_prior(self, ellipse: g2f.ParametricEllipse) -> g2f.ShapePrior | None:
+    def make_shape_prior(self, ellipse: g2f.ParametricEllipse) -> g2f.ShapePrior | None:
         """Make a prior on ellipse (shape) parameters.
 
         Parameters

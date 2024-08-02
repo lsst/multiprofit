@@ -468,7 +468,7 @@ class CatalogPsfFitter:
         for idx, (comp, config_comp) in enumerate(
             zip(psf_model.components, config_data.component_configs.values())
         ):
-            prior = config_comp.get_shape_prior(comp.ellipse)
+            prior = config_comp.make_shape_prior(comp.ellipse)
             if prior:
                 if prior_size := prior.prior_size:
                     prior_size.mean = sigmas[idx]
