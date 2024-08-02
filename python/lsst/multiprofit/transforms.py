@@ -106,8 +106,6 @@ def verify_transform_derivative(
     # Skip testing finite differencing if the derivative is very large
     # This might happen e.g. near the limits of the transformation
     # TODO: Check if better finite differencing is possible for large values
-    if abs_max is None:
-        abs_max = 1e8
     value = transform.reverse(value_transformed)
     if derivative is None:
         derivative = transform.derivative(value)
