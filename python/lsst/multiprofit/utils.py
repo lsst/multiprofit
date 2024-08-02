@@ -27,6 +27,7 @@ __all__ = [
     "set_config_from_dict",
 ]
 
+import logging
 from typing import Any
 
 import lsst.gauss2d.fit as g2f
@@ -34,6 +35,8 @@ import lsst.pex.config as pexConfig
 import numpy
 import numpy as np
 import pydantic
+
+_LOG = logging.getLogger(__name__)
 
 # Pydantic config to allow arbitrary typed Fields.
 arbitrary_allowed_config = pydantic.ConfigDict(
@@ -123,5 +126,6 @@ def set_config_from_dict(
                     config[key] = value
                 else:
                     setattr(config, key, value)
+            # TODO: Check if a narrower Exception type is better in DM-45577
             except Exception as e:
-                print(e)
+                _LOG.warning(e)
