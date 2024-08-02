@@ -661,6 +661,14 @@ class Modeller:
         else:
             model_loglike = None
 
+        params_psf_free = []
+        for psfmodel in model.psfmodels:
+            params_psf_free.extend(get_params_uniq(psfmodel, fixed=False))
+        if params_psf_free:
+            params_psf_free = {k: None for k in params_psf_free}
+            raise ValueError(f"Model has free PSF model params: {list(params_psf_free.keys())}."
+                             f" All PSF model parameters must be fixed before fitting.")
+
         model.setup_evaluators(
             evaluatormode=g2f.EvaluatorMode.jacobian,
             outputs=fitinputs.jacobians,
