@@ -83,8 +83,8 @@ def verify_transform_derivative(
     abs_max
         The x value to skip verification if np.abs(derivative) > x.
     dx_ratios
-        Iterable of signed ratios to set dx for finite differencing.
-        dx = value*ratio (untransformed). Only used if dx is None.
+        Iterable of signed ratios to set dx for finite differencing, where
+        dx = value*ratio (untransformed).
     **kwargs
         Keyword arguments to pass to np.isclose when comparing derivatives to
         finite differences.
@@ -103,29 +103,30 @@ def verify_transform_derivative(
     Default dx_ratios are [1e-4, 1e-6, 1e-8, 1e-10, 1e-12, 1e-14].
     Verification will test all ratios until at least one passes.
     """
-    # Skip testing finite differencing if the derivative is very large
-    # This might happen e.g. near the limits of the transformation
-    # TODO: Check if better finite differencing is possible for large values
     value = transform.reverse(value_transformed)
     if derivative is None:
         derivative = transform.derivative(value)
-    is_close = np.abs(derivative) > abs_max
-    if not is_close:
-        if dx_ratios is None:
-            dx_ratios = [1e-4, 1e-6, 1e-8, 1e-10, 1e-12, 1e-14]
-        for ratio in dx_ratios:
-            dx = value * ratio
-            fin_diff = (transform.forward(value + dx) - value_transformed) / dx
-            if not np.isfinite(fin_diff):
-                fin_diff = -(transform.forward(value - dx) - value_transformed) / dx
-            is_close = np.isclose(derivative, fin_diff, **kwargs)
-            if is_close:
-                break
-    if not is_close:
-        raise RuntimeError(
-            f"{transform} derivative={derivative:.8e} != last "
-            f"finite diff.={fin_diff:8e} with dx={dx} dx_abs_max={abs_max}"
-        )
+    if np.abs(derivative) > abs_max:
+        # Skip testing finite differencing if the derivative is very large
+        # This might happen e.g. near the limits of the transformation
+        # TODO: Check if better finite differencing is possible for large values
+        return
+    if dx_ratios is None:
+        dx_ratios = [1e-4, 1e-6, 1e-8, 1e-10, 1e-12, 1e-14]
+    elif not (len(dx_ratios) > 0):
+        raise ValueError(f"{dx_ratios=} must not be empty")
+    for ratio in dx_ratios:
+        dx = value * ratio
+        fin_diff = (transform.forward(value + dx) - value_transformed) / dx
+        if not np.isfinite(fin_diff):
+            fin_diff = -(transform.forward(value - dx) - value_transformed) / dx
+        is_close = np.isclose(derivative, fin_diff, **kwargs)
+        if is_close:
+            return
+    raise RuntimeError(
+        f"{transform} derivative={derivative:.8e} != last "
+        f"finite diff.={fin_diff:8e} with {dx=} and dx_abs_max={abs_max}"
+    )
 
 
 transforms_ref = {
