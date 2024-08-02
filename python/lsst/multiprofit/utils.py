@@ -23,7 +23,6 @@ __all__ = [
     "arbitrary_allowed_config",
     "frozen_arbitrary_allowed_config",
     "get_params_uniq",
-    "normalize",
     "set_config_from_dict",
 ]
 
@@ -32,8 +31,6 @@ from typing import Any
 
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig
-import numpy
-import numpy as np
 import pydantic
 
 _LOG = logging.getLogger(__name__)
@@ -71,30 +68,6 @@ def get_params_uniq(parametric: g2f.Parametric, **kwargs: Any) -> list[g2f.Param
     # This should always return the same list as:
     # list({p: None for p in }.keys())
     return g2f.params_unique(params)
-
-
-def normalize(ndarray: numpy.ndarray, return_sum: bool = False) -> np.ndarray | tuple[np.ndarray, float]:
-    """Normalize a numpy array.
-
-    Parameters
-    ----------
-    ndarray
-        The array to normalize.
-    return_sum
-        Whether to return the sum.
-
-    Returns
-    -------
-    ndarray
-        The input ndarray.
-    total
-        The sum of the array.
-    """
-    total = np.sum(ndarray)
-    ndarray /= total
-    if return_sum:
-        return ndarray, total
-    return ndarray
 
 
 def set_config_from_dict(
