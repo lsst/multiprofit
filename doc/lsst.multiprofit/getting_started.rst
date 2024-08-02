@@ -37,12 +37,13 @@ A single Sersic profile is a common choice for a simple galaxy model:
 All Gauss2D(Fit) objects can be printed, albeit with minimal formatting:
 
 >>> print(str(comp))
+SersicMixComponent(ellipse=SersicParametricEllipse(size_x=ReffXParameterD(value=0.000000, ), size_y=ReffYParameterD(value=0.000000, ), rho=RhoParameterD(value=0.000000, )), centroid=CentroidParameters(x=CentroidXParameterD(value=0.000000, ), y=CentroidYParameterD(value=0.000000, )), integralmodel=LinearIntegralModel(data={Channel(name=None): IntegralParameterD(value=1.000000, ),}), sersicindex=SersicIndexParameterD(value=0.500000, ))
 
 Components have parameters, which can be set individually:
 
 >>> comp.ellipse.size_x = 1.0
 >>> comp.ellipse.size_y = 2.0
->>> comp.ellipse.sersixindex = 1.0
+>>> comp.sersicindex = 1.0
 
 Component parameters can be initialized directly, but this is more verbose than mutating values after the fact.
 This is one of the reasons why using the second Config layer can be more convenient.
@@ -56,6 +57,7 @@ Sources are constructed from a list of components:
 
 >>> src = g2f.Source([comp])
 >>> print(src)
+Source(components=[SersicMixComponent(ellipse=SersicParametricEllipse(size_x=ReffXParameterD(value=1.000000, ), size_y=ReffYParameterD(value=2.000000, ), rho=RhoParameterD(value=0.000000, )), centroid=CentroidParameters(x=CentroidXParameterD(value=0.000000, ), y=CentroidYParameterD(value=0.000000, )), integralmodel=LinearIntegralModel(data={Channel(name=None): IntegralParameterD(value=1.000000, ),}), sersicindex=SersicIndexParameterD(value=1.000000, )),])
 
 .. _lsst.multiprofit-models-and-observations:
 
@@ -85,7 +87,7 @@ An Observation corresponds to a typical astronomical exposure and consists of an
 >>> # for some reason, and image.data is a read-only attr so numpy operators
 >>> # like += can't be used on it directly
 >>> image = g2d.ImageD(image_data)
->>> sigma_inv = g2d.ImageD(image_data)
+>>> sigma_inv = g2d.ImageD(sigma_inv_data)
 >>> mask_inv = g2d.ImageB(mask_inv_data)
 >>> observation = g2f.ObservationD(image=image, sigma_inv=sigma_inv, mask_inv=mask_inv, channel=channel)
 
@@ -106,26 +108,28 @@ Models consist of one or more Sources, one or more Observations, the correspondi
 Once constructed, models must have an evaluator set up. This design makes repeated model evaluations more efficient. The simplest evaluator makes an image of the model.
 
 >>> model.setup_evaluators(g2f.EvaluatorMode.image)
->>> model.evaluate()
+>>> _ = model.evaluate()
 >>> output = model.outputs[0]
 
 Now we will use this output image to initialize our observation:
 
 >>> rng = np.random.default_rng(1)
 >>> background = 0.01
->>> counts = rng.poisson((background + output)*gain)
+>>> gain=1e5
+>>> counts = rng.poisson((background + output.data)*gain)
 >>> image_data += counts/gain - background
 >>> sigma_inv_data += np.sqrt(counts)/gain
 
 The log-likelihood (and prior log likelihood, which will be zero with no priors specified) can now be evaluated:
 
->>> from lsst.multiprofit.plotting import plot_model_rgb
 >>> import matplotlib.pyplot as plt
 >>>
 >>> model.setup_evaluators(g2f.EvaluatorMode.loglike_image)
->>> print(model.evaluate())
->>> plot_model_rgb(model, stretch=1e-3)
->>> plt.show()
+>>> print([f"{x:.4e}" for x in model.evaluate()])
+['-1.4236e-05', '0.0000e+00']
+
+.. >>> from lsst.multiprofit.plotting import plot_model_rgb
+.. >>> plot_model_rgb(model, stretch=1e-3)
 
 .. _lsst.multiprofit-modellers:
 
@@ -133,16 +137,16 @@ Modellers
 =========
 
 The :py:class:`lsst.multiprofit.Modeller` class has minimal configuration options of its own.
-Instead, the fit_model method takes a model and (optional) fit configuration:
+Instead, the fit_model method takes  qa model and (optional) fit configuration:
 
 >>> import lsst.multiprofit as mpf
 >>> modeller = mpf.Modeller()
 
 Finally, we are ready to fit:
 
->>> # The PSF model parameters must be frozen first
->>> for param in psf_model.parameters():
->>>    param.fixed = True
+>>> # The PSF model parameters must be fixed first
+>>> # MultiProFit doesn't support fitting PSF model params
+>>> for param in psf_model.parameters(): param.fixed = True
 >>>
 >>> result = modeller.fit_model(model)
 
@@ -150,9 +154,9 @@ The result object contains fit metadata, the result object from the optimizer (s
 We can delete the more verbose metadata and print the remaining values:
 
 >>> result_dict = dict(result)
->>> for key in ("inputs", "result"):
->>>    del result_dict[key]
->>> print(result_dict)
+>>> for key in ("inputs", "result"): del result_dict[key]
+>>> print(result_dict.keys())
+dict_keys(['config', 'params', 'params_best', 'n_eval_resid', 'n_eval_func', 'n_eval_jac', 'time_eval', 'time_run'])
 
 More complete documentation for the second (Config classes) and third (batch fitting) layers is in progress.
 In the meantime, MultiProFit's unit tests and examples can offer some inspiration.
