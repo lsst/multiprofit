@@ -549,7 +549,7 @@ class Modeller:
         model: Model,
         fitinputs: FitInputs | None = None,
         printout: bool = False,
-        config: ModelFitConfig = None,
+        config: ModelFitConfig | None = None,
         **kwargs,
     ) -> FitResult:
         """Fit a model with a nonlinear optimizer.
