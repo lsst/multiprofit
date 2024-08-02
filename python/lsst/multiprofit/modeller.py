@@ -369,7 +369,11 @@ class FitResult(pydantic.BaseModel):
         None,
         title="The result object of the fit, directly from the optimizer",
     )
-    params_best: np.ndarray | None = pydantic.Field(
+    params: tuple[g2f.ParameterD, ...] | None = pydantic.Field(
+        None,
+        title="The parameter instances corresponding to params_best",
+    )
+    params_best: tuple[float, ...] | None = pydantic.Field(
         None,
         title="The best-fit parameter array (un-transformed)",
     )
@@ -759,10 +763,12 @@ class Modeller:
                 else:
                     params_best.append(result_opt.x[offsets_params[param] - 1])
             results.params_best = tuple(params_best)
+            results.params = params_free_sorted_all
         else:
             results.params_best = tuple(
                 result_opt.x[offsets_params[param] - 1] for param in params_free_sorted
             )
+            results.params = params_free_sorted
         results.n_eval_func = result_opt.nfev
         results.n_eval_jac = result_opt.njev if result_opt.njev else 0
 
