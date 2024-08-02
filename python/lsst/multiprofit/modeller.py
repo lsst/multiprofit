@@ -55,8 +55,7 @@ from .utils import arbitrary_allowed_config, frozen_arbitrary_allowed_config, ge
 
 try:
     # TODO: try importlib.util.find_spec
-    import fastnnls  # noqa
-
+    from fastnnls import fnnls  # noqa
     has_fastnnls = True
 except ImportError:
     has_fastnnls = False
@@ -529,16 +528,14 @@ class Modeller:
         results = {}
 
         for fit_method, kwargs in fit_methods.items():
+            kwargs = kwargs if kwargs is not None else fit_methods_linear[fit_method]
             if fit_method == "scipy.optimize.nnls":
                 values = spopt.nnls(x, y)[0]
             elif fit_method == "scipy.optimize.lsq_linear":
-                kwargs = kwargs if kwargs is not None else fit_methods_linear[fit_method]
                 values = spopt.lsq_linear(x, y, **kwargs).x
             elif fit_method == "numpy.linalg.lstsq":
                 values = np.linalg.lstsq(x, y, **kwargs)[0]
             elif fit_method == "fastnnls.fnnls":
-                from fastnnls import fnnls
-
                 y = x.T.dot(y)
                 x = x.T.dot(x)
                 values = fnnls(x, y)
