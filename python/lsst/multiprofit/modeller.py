@@ -33,10 +33,11 @@ __all__ = [
 ]
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 import logging
 import sys
 import time
-from typing import Any, ClassVar, Iterable
+from typing import Any, ClassVar
 if sys.version_info >= (3, 11, 0):
     from typing import Self
 else:
@@ -779,7 +780,7 @@ class Modeller:
     def fit_model_linear(
         cls,
         model: Model,
-        idx_obs: int | Iterable[int] | None = None,
+        idx_obs: int | Sequence[int] | None = None,
         ratio_min: float = 0,
         validate: bool = False,
     ) -> tuple[np.ndarray, np.ndarray]:
@@ -790,7 +791,7 @@ class Modeller:
         model
             The model to fit parameters for.
         idx_obs
-            An index or iterable of indices of observations to fit.
+            An index or sequence of indices of observations to fit.
             The default is to fit all observations.
         ratio_min
             The minimum ratio of the previous value to set any parameter to.
@@ -811,15 +812,22 @@ class Modeller:
         if n_sources != 1:
             raise ValueError("fit_model_linear does not yet support models with >1 sources")
         if idx_obs is not None:
-            if not ((idx_obs >= 0) and (idx_obs < n_data)):
-                raise ValueError(f"{idx_obs=} not >=0 and < {len(model.data)=}")
-            indices = range(idx_obs, idx_obs + 1)
+            if isinstance(idx_obs, int):
+                if not ((idx_obs >= 0) and (idx_obs < n_data)):
+                    raise ValueError(f"{idx_obs=} not >=0 and < {len(model.data)=}")
+                indices = range(idx_obs, idx_obs + 1)
+            else:
+                if len(set(idx_obs)) != len(idx_obs):
+                    raise ValueError(f"{idx_obs=} has duplicate values")
+                indices = tuple(idx_obs)
+                if not all(((idx_obs >= 0) and (idx_obs < n_data) for idx_obs in indices)):
+                    raise ValueError(f"idx_obs={indices} has values not >=0 and < {len(model.data)=}")
         else:
             indices = range(n_data)
 
         if validate:
             model.setup_evaluators(evaluatormode=g2f.EvaluatorMode.loglike)
-            loglike_init = model.evaluate()
+            loglike_init = model.evaluate() 
         else:
             loglike_init = None
         values_init = {}
