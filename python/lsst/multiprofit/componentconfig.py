@@ -32,6 +32,7 @@ __all__ = [
     "SersicComponentConfig",
 ]
 
+from abc import abstractmethod
 import string
 from typing import ClassVar
 
@@ -170,10 +171,12 @@ class EllipticalComponentConfig(ShapePriorConfig):
         """Return the default integral label."""
         return "${type_component} ${name_channel}-band"
 
+    @abstractmethod
     def get_size_label(self) -> str:
         """Return the label for the component's size parameters."""
         raise NotImplementedError("EllipticalComponent does not implement get_size_label")
 
+    @abstractmethod
     def get_type_name(self) -> str:
         """Return a descriptive component name."""
         raise NotImplementedError("EllipticalComponent does not implement get_type_name")
