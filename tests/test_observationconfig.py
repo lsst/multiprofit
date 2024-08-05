@@ -27,10 +27,10 @@ import pytest
 @pytest.fixture(scope="module")
 def kwargs_coordsys():
     return {
-        'dx1': 0.4,
-        'dy2': 1.6,
-        'x_min': -51.3,
-        'y_min': 1684.5,
+        "dx1": 0.4,
+        "dy2": 1.6,
+        "x_min": -51.3,
+        "y_min": 1684.5,
     }
 
 

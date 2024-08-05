@@ -38,11 +38,13 @@ import logging
 import sys
 import time
 from typing import Any, ClassVar
+
 if sys.version_info >= (3, 11, 0):
     from typing import Self
 else:
     from typing import TypeVar
-    Self = TypeVar("Self", bound="_BaseModelCompat")  # type: ignore
+
+    Self = TypeVar("Self", bound="LinearGaussians")  # type: ignore
 
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
@@ -57,6 +59,7 @@ from .utils import arbitrary_allowed_config, frozen_arbitrary_allowed_config, ge
 try:
     # TODO: try importlib.util.find_spec
     from fastnnls import fnnls  # noqa
+
     has_fastnnls = True
 except ImportError:
     has_fastnnls = False
@@ -262,9 +265,7 @@ class FitInputs(FitInputsBase, pydantic.BaseModel):
         jacobians = [None] * n_obs
         outputs_prior = [None] * n_params_jac
         for idx in range(n_params_jac):
-            outputs_prior[idx] = g2.ImageD(
-                jacobian[n_pixels_total:, idx].reshape((1, n_prior_residuals))
-            )
+            outputs_prior[idx] = g2.ImageD(jacobian[n_pixels_total:, idx].reshape((1, n_prior_residuals)))
 
         residual = np.zeros(size_data)
         residuals = [None] * n_obs
@@ -343,13 +344,13 @@ class ModelFitConfig(pexConfig.Config):
 
     eval_residual = pexConfig.Field[bool](
         doc="Whether to evaluate the residual every iteration before the Jacobian, which can improve "
-            "performance if most steps do not call the Jacobian function. Must be set to True if the "
-            "optimizer does not always evaluate the residual first, before the Jacobian.",
+        "performance if most steps do not call the Jacobian function. Must be set to True if the "
+        "optimizer does not always evaluate the residual first, before the Jacobian.",
         default=True,
     )
     fit_linear_iter = pexConfig.Field[int](
         doc="The number of iterations to wait before performing a linear fit during optimization."
-            " Default 0 disables the feature.",
+        " Default 0 disables the feature.",
         default=0,
     )
 
@@ -419,8 +420,9 @@ class Modeller:
         use_diag_only
             Whether to use diagonal terms only, i.e. ignore covariance.
         use_svd
-            Whether to use singular value decomposition to compute the inverse Hessian.
-        kwargs
+            Whether to use singular value decomposition to compute the inverse
+            Hessian.
+        **kwargs
             Additional keyword arguments to pass to model.compute_hessian.
 
         Returns
@@ -602,7 +604,9 @@ class Modeller:
             jac: np.ndarray,
         ):
             if not all(~np.isnan(params_new)):
-                raise InvalidProposalError(f"optimizer for {model_loglike=} proposed non-finite {params_new=}")
+                raise InvalidProposalError(
+                    f"optimizer for {model_loglike=} proposed non-finite {params_new=}"
+                )
             try:
                 for param, value in zip(params, params_new):
                     param.value_transformed = value
@@ -619,7 +623,8 @@ class Modeller:
             # If eval_residual is true, the user thinks it's likely that the
             # optimizer will choose not to evaluate the Jacobian in some
             # iterations. If False, evaluate the Jacobian now, which will
-            # also fill in the residual array, and avoid the model_loglike.evaluate
+            # also fill in the residual array, and avoid the call to
+            # model_loglike.evaluate
             if config_fit.eval_residual:
                 model_loglike.evaluate()
                 result.n_eval_resid += 1
@@ -630,12 +635,12 @@ class Modeller:
             return -result.inputs.residual
 
         def jacobian_func(
-                params_new: np.ndarray,
-                model_jac: Model,
-                model_loglike: Model,
-                params: tuple[tuple[int, g2f.ParameterD]],
-                result: FitResult,
-                jac: np.ndarray,
+            params_new: np.ndarray,
+            model_jac: Model,
+            model_loglike: Model,
+            params: tuple[tuple[int, g2f.ParameterD]],
+            result: FitResult,
+            jac: np.ndarray,
         ):
             # If False, the Jacobian should already have been computed by a
             # call to residual_func.
@@ -666,8 +671,10 @@ class Modeller:
             params_psf_free.extend(get_params_uniq(psfmodel, fixed=False))
         if params_psf_free:
             params_psf_free = {k: None for k in params_psf_free}
-            raise ValueError(f"Model has free PSF model params: {list(params_psf_free.keys())}."
-                             f" All PSF model parameters must be fixed before fitting.")
+            raise ValueError(
+                f"Model has free PSF model params: {list(params_psf_free.keys())}."
+                f" All PSF model parameters must be fixed before fitting."
+            )
 
         model.setup_evaluators(
             evaluatormode=g2f.EvaluatorMode.jacobian,
@@ -793,7 +800,7 @@ class Modeller:
         validate: bool = False,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Fit a model's linear parameters (integrals).
-        
+
         Parameters
         ----------
         model
@@ -835,7 +842,7 @@ class Modeller:
 
         if validate:
             model.setup_evaluators(evaluatormode=g2f.EvaluatorMode.loglike)
-            loglike_init = model.evaluate() 
+            loglike_init = model.evaluate()
         else:
             loglike_init = None
         values_init = {}

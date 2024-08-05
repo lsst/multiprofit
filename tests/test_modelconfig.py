@@ -56,17 +56,17 @@ def psf_model():
     drho, dsize_x, dsize_y = -0.4, 1.1, 1.9
 
     n_components = 3
-    flux_total = 2.*(n_components + 1)
-    fluxes = [x/flux_total for x in range(1, 1 + n_components)]
+    flux_total = 2.0 * (n_components + 1)
+    fluxes = [x / flux_total for x in range(1, 1 + n_components)]
 
     config = SourceConfig(
         component_groups={
-            'src': ComponentGroupConfig(
+            "src": ComponentGroupConfig(
                 components_gauss={
                     str(idx): GaussianComponentConfig(
-                        rho=ParameterConfig(value_initial=rho + idx*drho),
-                        size_x=ParameterConfig(value_initial=size_x + idx*dsize_x),
-                        size_y=ParameterConfig(value_initial=size_y + idx*dsize_y),
+                        rho=ParameterConfig(value_initial=rho + idx * drho),
+                        size_x=ParameterConfig(value_initial=size_x + idx * dsize_x),
+                        size_y=ParameterConfig(value_initial=size_y + idx * dsize_y),
                     )
                     for idx in range(n_components)
                 },
@@ -77,9 +77,7 @@ def psf_model():
     channel = g2f.Channel.NONE
     psf_model, priors = config.make_psf_model(
         [
-            [
-                {channel: flux} for flux in fluxes
-            ],
+            [{channel: flux} for flux in fluxes],
         ],
     )
     return psf_model
@@ -87,7 +85,7 @@ def psf_model():
 
 @pytest.fixture(scope="module")
 def psf_models(psf_model, channels) -> list[g2f.PsfModel]:
-    return [psf_model]*len(channels)
+    return [psf_model] * len(channels)
 
 
 @pytest.fixture(scope="module")
@@ -99,9 +97,9 @@ def modelconfig_fluxes(channels):
     fluxes_mix = []
     for idx, name in enumerate(("PS", "Sersic")):
         components_sersic[name] = SersicComponentConfig(
-            rho=ParameterConfig(value_initial=rho + idx*drho),
-            size_x=ParameterConfig(value_initial=size_x + idx*dsize_x),
-            size_y=ParameterConfig(value_initial=size_y + idx*dsize_y),
+            rho=ParameterConfig(value_initial=rho + idx * drho),
+            size_x=ParameterConfig(value_initial=size_x + idx * dsize_x),
+            size_y=ParameterConfig(value_initial=size_y + idx * dsize_y),
             sersic_index=SersicIndexParameterConfig(
                 value_initial=sersicn + idx * dsersicn,
                 fixed=idx == 0,
@@ -109,16 +107,15 @@ def modelconfig_fluxes(channels):
             ),
         )
         fluxes_comp = {
-            channel: flux + idx_channel*dflux*idx
-            for idx_channel, channel in enumerate(channels.values())
+            channel: flux + idx_channel * dflux * idx for idx_channel, channel in enumerate(channels.values())
         }
         fluxes_mix.append(fluxes_comp)
 
     modelconfig = ModelConfig(
         sources={
-            'src': SourceConfig(
+            "src": SourceConfig(
                 component_groups={
-                    'mix': ComponentGroupConfig(
+                    "mix": ComponentGroupConfig(
                         centroids={
                             "default": CentroidConfig(
                                 x=ParameterConfig(value_initial=15.8, fixed=True),
@@ -140,7 +137,7 @@ def test_ModelConfig(modelconfig_fluxes, data, psf_models):
     assert model is not None
     assert model.data is data
     for observation in model.data:
-        observation.sigma_inv.fill(1.)
+        observation.sigma_inv.fill(1.0)
         observation.mask_inv.fill(1)
 
     # Set the outputs to new images that refer to the existing data
