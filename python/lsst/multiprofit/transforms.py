@@ -109,7 +109,7 @@ def verify_transform_derivative(
     if np.abs(derivative) > abs_max:
         # Skip testing finite differencing if the derivative is very large
         # This might happen e.g. near the limits of the transformation
-        # TODO: Check if better finite differencing is possible for large values
+        # TODO: Check if finite differencing can be improved for large values
         return
     if dx_ratios is None:
         dx_ratios = [1e-4, 1e-6, 1e-8, 1e-10, 1e-12, 1e-14]

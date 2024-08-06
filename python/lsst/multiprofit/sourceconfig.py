@@ -42,7 +42,7 @@ ComponentConfigs = dict[str, EllipticalComponentConfig]
 
 
 class ComponentGroupConfig(pexConfig.Config):
-    """Configuration for a group of gauss2d.fit Components.
+    """Configuration for a group of lsst.gauss2d.fit Components.
 
     ComponentGroups may have linked CentroidParameters
     and IntegralModels, e.g. if is_fractional is True.
@@ -51,13 +51,13 @@ class ComponentGroupConfig(pexConfig.Config):
     -----
     Gaussian components are generated first, then Sersic.
 
-    This config class has no equivalent in gauss2dfit, because gauss2dfit
+    This config class has no equivalent in gauss2d_fit, because gauss2d_fit
     model parameter dependencies implicitly. This class implements only a
     subset of typical use cases, i.e. PSFs sharing a fractional integral
     model with fixed unit flux, and galaxies/PSF components sharing a single
     common centroid.
     If greater flexibility in linking parameter values is needed,
-    users must assemble their own gauss2dfit models directly.
+    users must assemble their own gauss2d_fit models directly.
     """
 
     centroids = pexConfig.ConfigDictField[str, CentroidConfig](
@@ -147,13 +147,13 @@ class ComponentGroupConfig(pexConfig.Config):
         component_fluxes: list[Fluxes],
         label_integral: str | None = None,
     ) -> tuple[list[g2f.Component], list[g2f.Prior]]:
-        """Make a list of gauss2d.fit.Component from this configuration.
+        """Make a list of lsst.gauss2d.fit.Component from this configuration.
 
         Parameters
         ----------
         component_fluxes
             A list of Fluxes to populate an appropriate
-            `gauss2d.fit.IntegralModel` with.
+            `lsst.gauss2d.fit.IntegralModel` with.
             If self.is_fractional, the first item in the list must be
             total fluxes while the remainder are fractions (the final
             fraction is always fixed at 1.0 and must not be provided).
@@ -262,7 +262,7 @@ class ComponentGroupConfig(pexConfig.Config):
 
 
 class SourceConfig(pexConfig.Config):
-    """Configuration for a gauss2d.fit Source.
+    """Configuration for an lsst.gauss2d.fit Source.
 
     Sources may contain components with distinct centroids that may be linked
     by a prior (e.g. a galaxy + AGN + star clusters),
@@ -331,7 +331,7 @@ class SourceConfig(pexConfig.Config):
         component_group_fluxes: list[list[Fluxes]],
         label_integral: str | None = None,
     ) -> [g2f.Source, list[g2f.Prior]]:
-        """Make a gauss2d.fit.Source from this configuration.
+        """Make an lsst.gauss2d.fit.Source from this configuration.
 
         Parameters
         ----------
@@ -363,7 +363,7 @@ class SourceConfig(pexConfig.Config):
         component_group_fluxes: list[list[Fluxes]],
         label_integral: str | None = None,
     ) -> [g2f.PsfModel, list[g2f.Prior]]:
-        """Make a gauss2d.fit.PsfModel from this configuration.
+        """Make an lsst.gauss2d.fit.PsfModel from this configuration.
 
         This method will validate that the arguments make a valid PSF model,
         i.e. with a unity total flux, and only one config for the none band.

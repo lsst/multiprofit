@@ -27,7 +27,7 @@ import lsst.pex.config as pexConfig
 
 
 class CoordinateSystemConfig(pexConfig.Config):
-    """Configuration for a gauss2d CoordinateSystem."""
+    """Configuration for an lsst.gauss2d.CoordinateSystem."""
 
     dx1 = pexConfig.Field[float](doc="The x-axis pixel scale", optional=False, default=1.0)
     dy2 = pexConfig.Field[float](doc="The y-axis pixel scale", optional=False, default=1.0)
@@ -47,7 +47,7 @@ class CoordinateSystemConfig(pexConfig.Config):
 
 
 class ObservationConfig(pexConfig.Config):
-    """Configuration for a gauss2d.fit Observation."""
+    """Configuration for an lsst.gauss2d.fit.Observation."""
 
     band = pexConfig.Field[str](doc="The name of the band", optional=False, default="None")
     coordsys = pexConfig.ConfigField[CoordinateSystemConfig](doc="The coordinate system config")
@@ -69,7 +69,9 @@ class ObservationConfig(pexConfig.Config):
 
 
 class PsfObservationConfig(ObservationConfig):
-    """Configuration for a gauss2d.fit Observation used for PSF fitting."""
+    """Configuration for an lsst.gauss2d.fit.Observation used for
+    PSF fitting.
+    """
 
     def validate(self):
         super().validate()

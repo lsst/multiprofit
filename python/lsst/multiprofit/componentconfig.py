@@ -363,7 +363,7 @@ class EllipticalComponentConfig(ShapePriorConfig):
 
 
 class GaussianComponentConfig(EllipticalComponentConfig):
-    """Configuration for a gauss2d.fit Gaussian component."""
+    """Configuration for an lsst.gauss2d.fit Gaussian component."""
 
     transform_frac_name = pexConfig.Field[str](
         doc="The name of the reference transform for flux fraction parameters",

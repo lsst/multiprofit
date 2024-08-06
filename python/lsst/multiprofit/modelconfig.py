@@ -32,7 +32,7 @@ from .sourceconfig import SourceConfig
 
 
 class ModelConfig(pexConfig.Config):
-    """Configuration for a gauss2d.fit Model."""
+    """Configuration for an lsst.gauss2d.fit Model."""
 
     sources = pexConfig.ConfigDictField[str, SourceConfig](doc="The configuration for sources")
 
