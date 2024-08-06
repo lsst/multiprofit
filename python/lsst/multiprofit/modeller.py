@@ -798,6 +798,8 @@ class Modeller:
         idx_obs: int | Sequence[int] | None = None,
         ratio_min: float = 0,
         validate: bool = False,
+        limits_interval_min: float = 0.01,
+        limits_interval_max: float = 1.0,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Fit a model's linear parameters (integrals).
 
@@ -814,6 +816,12 @@ class Modeller:
         validate
             If True, check that the model log-likelihood improves and restore
             the original parameter values if not.
+        limits_interval_min
+            A value 0<=x<limits_interval_max<=1 specifying the lower bound to
+            clip parameter values to, as a ratio of each parameter's limits.
+        limits_interval_max
+            A value 0<=limits_interval_min<x<=1 specifying the upper bound to
+            clip parameter values to, as a ratio of each parameter's limits.
 
         Returns
         -------
@@ -821,7 +829,20 @@ class Modeller:
             The initial log likelihood if validate is True, otherwise None.
         loglike_final
             The post-fit log likelihood if validate is True, otherwise None.
+
+        Notes
+        -----
+        The purpose of limits_interval is to slightly offset parameters from
+        the extrema of their limits. This is typically most useful for
+        integral parameters with a minimum of zero, which might otherwise be
+        stuck at zero in a subsequent nonlinear fit.
         """
+        if (
+            not (0 <= limits_interval_min <= 1)
+            or not (0 <= limits_interval_max <= 1)
+            or not (limits_interval_min < limits_interval_max)
+        ):
+            raise ValueError(f"Must have 0 <= {limits_interval_min} < {limits_interval_max} <= 1")
         n_data = len(model.data)
         n_sources = len(model.sources)
         if n_sources != 1:
@@ -862,15 +883,25 @@ class Modeller:
                 values_new[parameter] = value_new
 
         for parameter, value in values_new.items():
-            # TODO: maybe just np.clip instead
-            if not (value > parameter.limits.min):
-                value = parameter.limits.min + (
-                    1e-5
-                    if (parameter.limits.max == np.inf)
-                    else (0.02 * (parameter.limits.max - parameter.limits.min))
+            value_min, value_max = parameter.limits.min, parameter.limits.max
+            min_is_inf = value_min == -np.inf
+            max_is_inf = value_max == np.inf
+            if min_is_inf:
+                if max_is_inf:
+                    parameter.value = value
+                    continue
+                if not value < value_max:
+                    value = value_max - 1e-5
+            elif max_is_inf:
+                if not value > value_min:
+                    value = value_min + 1e-5
+            else:
+                limits_interval = parameter.limits.max - parameter.limits.min
+                value = np.clip(
+                    value,
+                    value_min + limits_interval_min * limits_interval,
+                    value_min + limits_interval_max * limits_interval,
                 )
-            elif not (value < parameter.limits.max):
-                value = parameter.limits.min + 0.98 * (parameter.limits.max - parameter.limits.min)
             parameter.value = value
 
         if validate:
