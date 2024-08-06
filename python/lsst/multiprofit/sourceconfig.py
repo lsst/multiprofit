@@ -350,7 +350,7 @@ class SourceConfig(pexConfig.Config):
         return f"{prefix}{ComponentGroupConfig.get_integral_label_default()}"
 
     def has_prefix_group(self) -> bool:
-        return (len(self.component_groups) > 1) or next(iter(self.component_groups.keys()))
+        return (len(self.component_groups) > 1) or bool(next(iter(self.component_groups.keys())))
 
     def make_source(
         self,
@@ -371,7 +371,7 @@ class SourceConfig(pexConfig.Config):
         Returns
         -------
         source
-            An appropriate gauss2d.fit.Source.
+            An appropriate lsst.gauss2d.fit.Source.
         priors
             A list of priors from all constituent components.
         """
@@ -406,7 +406,7 @@ class SourceConfig(pexConfig.Config):
         Returns
         -------
         psf_model
-            An appropriate gauss2d.fit.PSfModel.
+            An appropriate lsst.gauss2d.fit.PsfModel.
         priors
             A list of priors from all constituent components.
         """
