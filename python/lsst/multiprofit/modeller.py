@@ -391,7 +391,7 @@ class FitResult(pydantic.BaseModel):
 
 
 class Modeller:
-    """Fit gauss2d.fit Model instances using Python optimizers.
+    """Fit lsst.gauss2d.fit Model instances using Python optimizers.
 
     Parameters
     ----------

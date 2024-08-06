@@ -193,6 +193,7 @@ class EllipticalComponentConfig(ShapePriorConfig):
     def get_transform_size(self) -> g2f.TransformD | None:
         return transforms_ref[self.transform_size_name] if self.transform_size_name else None
 
+    @abstractmethod
     def make_component(
         self,
         centroid: g2f.CentroidParameters,
@@ -221,6 +222,13 @@ class EllipticalComponentConfig(ShapePriorConfig):
         raise NotImplementedError("EllipticalComponent cannot not implement make_component")
 
     def make_gaussianparametricellipse(self) -> g2f.GaussianParametricEllipse:
+        """Make a GaussianParametericEllipse from this object's configuration.
+
+        Returns
+        -------
+        ellipse
+            The configured ellipse.
+        """
         transform_size = self.get_transform_size()
         transform_rho = self.get_transform_rho()
         ellipse = g2f.GaussianParametricEllipse(
@@ -249,6 +257,23 @@ class EllipticalComponentConfig(ShapePriorConfig):
     def make_flux_parameter(
         self, value: float | None, label: str | None = None, **kwargs
     ) -> g2f.IntegralParameterD:
+        """Make a single IntegralParameterD from this object's configuration.
+
+        Parameters
+        ----------
+        value
+            The initial value. Default is self.flux.value_initial.
+        label
+            The label for the parameter. Default empty string.
+        **kwargs
+            Other keyword arguments to pass to the IntegralParameterD
+             constructor.
+
+        Returns
+        -------
+        param
+            The constructed IntegralParameterD.
+        """
         parameter = g2f.IntegralParameterD(
             value if value is not None else self.flux.value_initial,
             fixed=self.flux.fixed,
@@ -261,7 +286,7 @@ class EllipticalComponentConfig(ShapePriorConfig):
     def make_linear_integral_model(
         self, fluxes: Fluxes, label_integral: str | None = None, **kwargs
     ) -> g2f.IntegralModel:
-        """Make a gauss2d.fit.LinearIntegralModel for this component.
+        """Make an lsst.gauss2d.fit.LinearIntegralModel for this component.
 
         Parameters
         ----------
@@ -278,7 +303,7 @@ class EllipticalComponentConfig(ShapePriorConfig):
         Returns
         -------
         integral_model
-            The requested gauss2d.fit.IntegralModel.
+            The requested lsst.gauss2d.fit.IntegralModel.
         """
         if label_integral is None:
             label_integral = self.get_integral_label_default()
@@ -299,14 +324,41 @@ class EllipticalComponentConfig(ShapePriorConfig):
 
     @staticmethod
     def set_size_x(component: g2f.EllipticalComponent, size_x: float) -> None:
+        """Set the x-axis size parameter value for a component.
+
+        Parameters
+        ----------
+        component
+            The component to set the size for.
+        size_x
+            The value to set.
+        """
         component.ellipse.sigma_x = size_x
 
     @staticmethod
     def set_size_y(component: g2f.EllipticalComponent, size_y: float) -> None:
+        """Set the y-axis size parameter value for a component.
+
+        Parameters
+        ----------
+        component
+            The component to set the size for.
+        size_y
+            The value to set.
+        """
         component.ellipse.sigma_y = size_y
 
     @staticmethod
     def set_rho(component: g2f.EllipticalComponent, rho: float) -> None:
+        """Set the rho parameter value for a component.
+
+        Parameters
+        ----------
+        component
+            The component to set the size for.
+        rho
+            The value to set.
+        """
         component.ellipse.rho = rho
 
 
@@ -355,6 +407,19 @@ class SersicIndexParameterConfig(ParameterConfig):
     )
 
     def get_prior(self, param: g2f.SersicIndexParameterD) -> g2f.Prior | None:
+        """Make a Gaussian prior for a given SersicIndexParameterD.
+
+        Parameters
+        ----------
+        param
+            The parameter to make a prior for.
+
+        Returns
+        -------
+        prior
+            The prior object, set according to the configuration, or none if
+            the required config parameters are None.
+        """
         if self.prior_mean is not None:
             mean = param.transform.forward(self.prior_mean) if self.prior_transformed else self.prior_mean
             stddev = (
