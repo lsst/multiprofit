@@ -460,7 +460,15 @@ class SersicComponentConfig(EllipticalComponentConfig):
     or an `lsst.gauss2d.fit.SersicMixComponent` otherwise.
     """
 
-    _interpolators: dict[int, g2f.SersicMixInterpolator] = {}
+    _interpolator_class_default = (
+        g2f.GSLSersicMixInterpolator
+        if hasattr(g2f, "GSLSersicMixInterpolator")
+        else g2f.LinearSersicMixInterpolator
+    )
+    _interpolators: dict[int, g2f.SersicMixInterpolator] = {
+        4: _interpolator_class_default(4),
+        8: _interpolator_class_default(8),
+    }
 
     order = pexConfig.ChoiceField[int](doc="Sersic mix order", allowed={4: "Four", 8: "Eight"}, default=4)
     sersic_index = pexConfig.ConfigField[SersicIndexParameterConfig](doc="Sersic index config")
