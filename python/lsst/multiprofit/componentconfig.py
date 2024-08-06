@@ -397,7 +397,7 @@ class GaussianComponentConfig(EllipticalComponentConfig):
 
 
 class SersicIndexParameterConfig(ParameterConfig):
-    """Configuration for a gauss2d.fit Sersic index parameter."""
+    """Configuration for an lsst.gauss2d.fit Sersic index parameter."""
 
     prior_mean = pexConfig.Field[float](doc="Mean for the prior (untransformed)", default=1.0, optional=True)
     prior_stddev = pexConfig.Field[float](doc="Std. dev. for the prior", default=0.5, optional=True)
@@ -451,12 +451,13 @@ class SersicIndexParameterConfig(ParameterConfig):
 
 
 class SersicComponentConfig(EllipticalComponentConfig):
-    """Configuration for a gauss2d.fit Sersic component.
+    """Configuration for an lsst.gauss2d.fit Sersic component.
 
     Notes
     -----
-    make_component will return a `gauss2d.fit.GaussianComponent` if the Sersic
-    index is fixed at 0.5, or a `gauss2d.fit.SersicMixComponent` otherwise.
+    make_component will return a `ComponentData` with an
+    `lsst.gauss2d.fit.GaussianComponent` if the Sersic index is fixed at 0.5,
+    or an `lsst.gauss2d.fit.SersicMixComponent` otherwise.
     """
 
     _interpolators: dict[int, g2f.SersicMixInterpolator] = {}
@@ -464,7 +465,19 @@ class SersicComponentConfig(EllipticalComponentConfig):
     order = pexConfig.ChoiceField[int](doc="Sersic mix order", allowed={4: "Four", 8: "Eight"}, default=4)
     sersic_index = pexConfig.ConfigField[SersicIndexParameterConfig](doc="Sersic index config")
 
-    def get_interpolator(self, order: int):
+    def get_interpolator(self, order: int) -> g2f.SersicMixInterpolator:
+        """Get the best available interpolator for a given order.
+
+        Parameters
+        ----------
+        order
+            The order of the desired interpolator.
+
+        Returns
+        -------
+        interpolator
+            An interpolator of the requested order.
+        """
         return self._interpolators.get(
             order,
             (
@@ -482,6 +495,7 @@ class SersicComponentConfig(EllipticalComponentConfig):
         return f"{'Gaussian (fixed Sersic)' if is_gaussian_fixed else 'Sersic'}"
 
     def is_gaussian_fixed(self):
+        """Return True if the Sersic index is fixed at 0.5."""
         return self.sersic_index.value_initial == 0.5 and self.sersic_index.fixed
 
     def make_component(
