@@ -280,6 +280,31 @@ class SourceConfig(pexConfig.Config):
         label_integral: str,
         validate_psf: bool = False,
     ) -> [list[g2f.Component], list[g2f.Prior]]:
+        """Make components and priors for this source.
+
+        Parameters
+        ----------
+        component_group_fluxes
+            A list of inputs to pass to make_components for each group in
+            self.component_groups.
+        label_integral
+            An integral parameter label to pass to self.format_label.
+        validate_psf
+            Whether to validate that component_group_fluxes only uses the NONE
+            channel, as required for a PSF model.
+
+        Returns
+        -------
+        components
+            The list of components for this source.
+        priors
+            The list of priors for this source.
+
+        Notes
+        -----
+        Components and priors are concatenated by iterating through
+        self.component_groups.
+        """
         if len(component_group_fluxes) != len(self.component_groups):
             raise ValueError(f"{len(component_group_fluxes)=} != {len(self.component_groups)=}")
         components = []
