@@ -406,7 +406,7 @@ class SersicIndexParameterConfig(ParameterConfig):
         default=True,
     )
 
-    def get_prior(self, param: g2f.SersicIndexParameterD) -> g2f.Prior | None:
+    def make_prior(self, param: g2f.SersicIndexParameterD) -> g2f.Prior | None:
         """Make a Gaussian prior for a given SersicIndexParameterD.
 
         Parameters
@@ -523,7 +523,7 @@ class SersicComponentConfig(EllipticalComponentConfig):
                 integral=integral_model,
                 sersicindex=sersic_index,
             )
-            prior = self.sersic_index.get_prior(sersic_index) if not sersic_index.fixed else None
+            prior = self.sersic_index.make_prior(sersic_index) if not sersic_index.fixed else None
             priors = [prior] if prior else []
         prior = self.make_shape_prior(ellipse)
         if prior:
