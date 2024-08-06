@@ -285,7 +285,8 @@ class SourceConfig(pexConfig.Config):
         components = []
         priors = []
         if validate_psf:
-            keys_expected = tuple((g2f.Channel.NONE,))
+            # PSFs must use only the NONE channel
+            keys_expected = (g2f.Channel.NONE,)
         for component_fluxes, (name_group, component_group) in zip(
             component_group_fluxes, self.component_groups.items()
         ):
