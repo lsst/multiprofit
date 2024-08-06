@@ -110,20 +110,36 @@ class ComponentGroupConfig(pexConfig.Config):
         component_configs: ComponentConfigs,
         is_fractional: bool = False,
     ) -> list[Fluxes]:
+        """Get default flux values for a ComponentConfigs instance.
+
+        Parameters
+        ----------
+        channels
+            A tuple of channels to populate with flux values.
+        component_configs
+            A dict of named EllipticalComponentConfigs to provide initial flux
+            values for.
+        is_fractional
+            Whether to return values for a fractional model. If True, all
+            components must have a fluxfrac config set and the first must
+            also have a valid flux config.
+
+        Returns
+        -------
+        fluxes
+            A dict of flux values by channel for each component.
+        """
         if len(component_configs) == 0:
             raise ValueError("Must provide at least one ComponentConfig")
         fluxes = []
         component_configs_iter = tuple(component_configs.values())[: len(component_configs) - is_fractional]
         for idx, component_config in enumerate(component_configs_iter):
-            if is_fractional:
-                if idx == 0:
-                    value = component_config.flux.value_initial
-                    fluxes.append({channel: value for channel in channels})
-                value = component_config.fluxfrac.value_initial
-                fluxes.append({channel: value for channel in channels})
-            else:
+            if is_fractional and (idx == 0):
                 value = component_config.flux.value_initial
                 fluxes.append({channel: value for channel in channels})
+            config_flux = component_config.fluxfrac if is_fractional else component_config.flux
+            value = config_flux.value_initial
+            fluxes.append({channel: value for channel in channels})
         return fluxes
 
     def make_components(
