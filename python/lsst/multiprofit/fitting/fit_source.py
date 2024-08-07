@@ -74,7 +74,7 @@ class CatalogExposureSourcesABC(CatalogExposureABC):
 
         Returns
         -------
-        psf_model : `gauss2d.fit.PsfModel`
+        psf_model : `lsst.gauss2d.fit.PsfModel`
             A PsfModel object initialized with the best-fit parameters, or None
             if PSF rebuilding failed for an expected reason (i.e. the input PSF
             fit table has a flag set).
@@ -94,7 +94,7 @@ class CatalogExposureSourcesABC(CatalogExposureABC):
 
         Returns
         -------
-        observation : `gauss2d.fit.Observation`
+        observation : `lsst.gauss2d.fit.Observation`
             An Observation object with suitable data for fitting parametric
             models of the source.
         """
@@ -254,8 +254,8 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
 
 
 class CatalogSourceFitterConfigData(pydantic.BaseModel):
-    """Configuration data for a fitter that can initialize gauss2d.fit models
-    and images thereof.
+    """Configuration data for a fitter that can initialize lsst.gauss2d.fit
+    models and images thereof.
 
     This class relies on cached properties being computed once, mostly shortly
     after initialization. Therefore, it and the config field must be frozen to
