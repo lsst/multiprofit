@@ -256,12 +256,15 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
                 # TODO: return this to component.integralmodel
                 # when binding for g2f.FractionalIntegralModel is fixed
                 params_flux = get_params_uniq(component, fixed=False, nonlinear=False)
+                # Fractional models should have one fixed flux parameter
+                # (with value=1), and hence an empty params_flux
                 has_params_flux = not config_comp.flux.fixed and (
                     (not is_fractional) or (idx_comp_group == 0)
                 )
-                if len(params_flux) != has_params_flux:
+                n_params_flux_expect = int(has_params_flux)
+                if len(params_flux) != n_params_flux_expect:
                     raise RuntimeError(
-                        f"{params_flux=} has len={len(params_flux)} but expected {has_params_flux}"
+                        f"{params_flux=} has len={len(params_flux)} but expected {n_params_flux_expect}"
                     )
                 if has_params_flux:
                     parameters[f"{prefix_comp}flux"] = params_flux[0]
