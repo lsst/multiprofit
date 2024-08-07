@@ -464,8 +464,8 @@ class CatalogPsfFitter:
     def fit(
         self,
         catexp: CatalogExposurePsfABC,
-        config_data: CatalogPsfFitterConfigData = None,
-        logger: logging.Logger = None,
+        config_data: CatalogPsfFitterConfigData | None = None,
+        logger: logging.Logger | None = None,
         **kwargs,
     ) -> astropy.table.Table:
         """Fit PSF models for a catalog with MultiProFit.
