@@ -237,7 +237,7 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
         idx_comp_first = 0
 
         # Iterate over each component group
-        for name_group, config_group in self.componentgroupconfigs.items():
+        for name_group, config_group in self.componentgroup_configs.items():
             prefix_group = f"{name_group}_" if has_prefix_group else ""
             is_fractional = config_group.is_fractional
             # Does this group have independent centroids?
