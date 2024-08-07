@@ -609,6 +609,8 @@ class CatalogPsfFitter:
                     result /= np.sum(result)
                     for idx_param, param in enumerate(fluxfracs):
                         param.value = result[idx_param]
+                        # fluxfracs are the fraction of the remaining flux
+                        # this renormalizes to the remaining parameters
                         result /= np.sum(result[idx_param + 1 :])
 
                 result_full = self.modeller.fit_model(model, fitinputs=fitInputs, **kwargs)
