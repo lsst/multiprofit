@@ -498,7 +498,7 @@ class CatalogPsfFitter:
 
         errors_expected = set(self.errors_expected.values())
         n_errors_expected = len(errors_expected)
-        if n_errors_expected != len(errors_expected):
+        if n_errors_expected != len(self.errors_expected):
             raise ValueError(f"{self.errors_expected=} has duplicate values; they must be unique")
         if n_errors_expected != len(config.flag_errors):
             raise ValueError(f"len({self.errors_expected=}) != len({config.flag_errors=})")
