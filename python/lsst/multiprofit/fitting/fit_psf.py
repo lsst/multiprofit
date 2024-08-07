@@ -382,7 +382,7 @@ class CatalogPsfFitter:
         self.modeller = modeller
 
     @staticmethod
-    def _get_data_default(img_psf: np.array, gain: float = 1e5) -> g2f.DataD:
+    def _get_data_default(img_psf: np.ndarray, gain: float = 1e5) -> g2f.DataD:
         """Return a default-initialized data for a given PSF image.
 
         Parameters
@@ -416,7 +416,7 @@ class CatalogPsfFitter:
             ]
         )
 
-    def _get_data(self, img_psf: np.array, gain: float = 1e5) -> g2f.DataD:
+    def _get_data(self, img_psf: np.ndarray, gain: float = 1e5) -> g2f.DataD:
         """Build a Model-able gauss2d.fit.Data from a normalized PSF image.
 
         Parameters
