@@ -536,7 +536,7 @@ class CatalogPsfFitter:
             gaussians_linear = LinearGaussians.make(model_source, is_psf=True)
             flux_total.fixed = True
 
-        # TODO: Remove isinstance when channel filtering is fixed
+        # TODO: Remove isinstance when channel filtering is fixed: DM-45665
         fluxfracs = tuple(
             param
             for param in get_params_uniq(model_source, linear=False, channel=g2f.Channel.NONE, fixed=False)
