@@ -437,10 +437,7 @@ class CatalogPsfFitter:
     @staticmethod
     def _get_logger() -> logging.Logger:
         """Return a suitably-named and configured logger."""
-        logging.basicConfig()
         logger = logging.getLogger(__name__)
-        logger.level = logging.INFO
-
         return logger
 
     @abstractmethod
