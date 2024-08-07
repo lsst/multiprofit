@@ -180,7 +180,8 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
         return v
 
     @cached_property
-    def components(self) -> dict[str, ComponentGroupConfig]:
+    def components(self) -> dict[str, g2f.Component]:
+        """Return the components of the PSF model by name."""
         components = self.psf_model.components
         names = self.component_configs.keys()
         if len(components) != len(names):
@@ -190,10 +191,14 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
 
     @cached_property
     def component_configs(self) -> ComponentConfigs:
+        """Return the config for each component in the PSF model."""
         return self.config.model.get_component_configs()
 
     @cached_property
-    def componentgroupconfigs(self) -> dict[str, ComponentGroupConfig]:
+    def componentgroup_configs(self) -> dict[str, ComponentGroupConfig]:
+        """Return the config for each component group in the PSF model
+        by name.
+        """
         return {k: v for k, v in self.config.model.component_groups.items()}
 
     def init_psf_model(
@@ -225,6 +230,7 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
 
     @cached_property
     def parameters(self) -> dict[str, g2f.ParameterD]:
+        """Return the parameters for the PSF model by name."""
         parameters = {}
         has_prefix_group = self.config.model.has_prefix_group()
         components = self.psf_model.components
@@ -297,11 +303,13 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
 
     @cached_property
     def psf_model(self) -> g2f.PsfModel:
+        """Return the PSF model."""
         psf_model = self.config.make_psf_model()
         return psf_model
 
     @cached_property
     def psf_model_gaussians(self):
+        """Return the Gaussians comprising the PSF model."""
         gaussians = self.psf_model.gaussians()
         return gaussians
 
@@ -364,6 +372,20 @@ class CatalogPsfFitter:
 
     @staticmethod
     def _get_data_default(img_psf: np.array, gain: float = 1e5) -> g2f.DataD:
+        """Return a default-initialized data for a given PSF image.
+
+        Parameters
+        ----------
+        img_psf
+            A normalized image of the PSF, ideally with noise.
+        gain
+            The multiplicative factor needed to change the image to counts.
+
+        Returns
+        -------
+        data
+            A DataD instance than can be used to fit a PSF model.
+        """
         # TODO: Improve these arbitrary definitions
         # Look at S/N of PSF stars?
         background = np.std(img_psf[img_psf < 2 * np.abs(np.min(img_psf))])
@@ -411,8 +433,22 @@ class CatalogPsfFitter:
         return logger
 
     @abstractmethod
-    def check_source(self, source, config):
-        pass
+    def check_source(self, source, config: CatalogPsfFitterConfig) -> None:
+        """Check whether a source can have its PSF model fit.
+
+        Parameters
+        ----------
+        source
+            The source row to check.
+        config
+            The fitter config.
+
+        Notes
+        -----
+        Derived classes may use the source row as they deem fit. For example,
+        if the source has poor quality flags, a fitter may choose not to fit
+        the PSF model if it will not end up being used anyway.
+        """
 
     def fit(
         self,
