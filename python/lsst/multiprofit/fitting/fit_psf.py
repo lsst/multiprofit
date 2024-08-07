@@ -657,9 +657,9 @@ class CatalogPsfFitter:
         config_data
             The fitter config with cached data.
         limits_x
-            Hard limits for the source's x centroid.
+            Hard limits for the source's x centroid. Default (0, n_columns).
         limits_y
-            Hard limits for the source's y centroid.
+            Hard limits for the source's y centroid. Default (0, n_rows).
         """
         n_rows, n_cols = model.data[0].image.data.shape
         cen_x, cen_y = n_cols / 2.0, n_rows / 2.0
