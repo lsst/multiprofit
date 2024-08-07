@@ -575,7 +575,6 @@ class CatalogPsfFitter:
         # dummy size for first iteration
         size, size_new = 0, 0
         fitInputs = FitInputsDummy()
-        catexp_get_psf_image = catexp.get_psf_image
 
         for idx in range_idx:
             time_init = time.process_time()
@@ -586,7 +585,7 @@ class CatalogPsfFitter:
 
             try:
                 self.check_source(source, config=config)
-                img_psf = catexp_get_psf_image(source)
+                img_psf = catexp.get_psf_image(source)
                 data = self._get_data(img_psf)
                 model = g2f.ModelD(data=data, psfmodels=[model_psf], sources=[model_source], priors=priors)
                 self.initialize_model(model=model, config_data=config_data)
