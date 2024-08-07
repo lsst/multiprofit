@@ -645,8 +645,8 @@ class CatalogPsfFitter:
         self,
         model: g2f.ModelD,
         config_data: CatalogPsfFitterConfigData,
-        limits_x: g2f.LimitsD = None,
-        limits_y: g2f.LimitsD = None,
+        limits_x: g2f.LimitsD | None = None,
+        limits_y: g2f.LimitsD | None = None,
     ) -> None:
         """Initialize a Model for a single source row.
 
