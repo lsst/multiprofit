@@ -371,8 +371,8 @@ class CatalogPsfFitter:
 
     def __init__(
         self,
-        modeller: Modeller = None,
-        errors_expected: dict[Type[Exception], str] = None,
+        modeller: Modeller | None = None,
+        errors_expected: dict[Type[Exception], str] | None = None,
     ):
         if modeller is None:
             modeller = Modeller()
