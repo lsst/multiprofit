@@ -125,7 +125,7 @@ class CatalogPsfFitterConfig(CatalogFitterConfig):
 
     def schema(
         self,
-        bands: list[str] = None,
+        bands: list[str] | None = None,
     ) -> list[ColumnInfo]:
         """Return the schema as an ordered list of columns.
 

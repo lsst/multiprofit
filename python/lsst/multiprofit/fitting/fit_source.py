@@ -209,7 +209,7 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
 
     def schema(
         self,
-        bands: list[str] = None,
+        bands: list[str] | None = None,
     ) -> list[ColumnInfo]:
         if bands is None or not (len(bands) > 0):
             raise ValueError("CatalogSourceFitter must provide at least one band")
