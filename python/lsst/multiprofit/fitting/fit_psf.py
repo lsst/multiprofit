@@ -230,28 +230,37 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
 
     @cached_property
     def parameters(self) -> dict[str, g2f.ParameterD]:
-        """Return the parameters for the PSF model by name."""
+        """Return the free parameters for the PSF model by name."""
         parameters = {}
         has_prefix_group = self.config.model.has_prefix_group()
         components = self.psf_model.components
         idx_comp_first = 0
+
+        # Iterate over each component group
         for name_group, config_group in self.componentgroupconfigs.items():
             prefix_group = f"{name_group}_" if has_prefix_group else ""
             is_fractional = config_group.is_fractional
+            # Does this group have independent centroids?
+            # Should generally be False if not is_fractional, since there is
+            # little reason to make a group otherwise.
             multicen = len(config_group.centroids) > 1
             configs_comp = config_group.get_component_configs()
             idx_last = len(configs_comp) - 1
             n_params_flux_frac = 0
 
+            # Iterate over each component in the group
             for idx_comp_group, (name_comp, config_comp) in enumerate(configs_comp.items()):
+                # The last component needs special handling if is_fractional
                 is_last = idx_comp_group == idx_last
                 component = components[idx_comp_first + idx_comp_group]
                 label_size = config_comp.get_size_label()
                 prefix_comp = f"{prefix_group}{name_comp}{'_' if name_comp else ''}"
+                # Give the centroid parameters an appropriate prefix
                 if multicen or (idx_comp_group == 0):
                     prefix_cen = prefix_comp if multicen else prefix_group
                     parameters[f"{prefix_cen}cen_x"] = component.centroid.x_param
                     parameters[f"{prefix_cen}cen_y"] = component.centroid.y_param
+                # Add each free shape parameter
                 if not config_comp.size_x.fixed:
                     parameters[f"{prefix_comp}{label_size}_x"] = component.ellipse.size_x_param
                 if not config_comp.size_y.fixed:
@@ -282,6 +291,8 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
                     if isinstance(param, g2f.ProperFractionParameterD)
                 ]
                 if is_fractional:
+                    # The last flux fraction must be fixed at 1.0, since it
+                    # by definition contains all of the remaining flux
                     if is_last:
                         if (config_comp.fluxfrac.value_initial != 1.0) or (not config_comp.fluxfrac.fixed):
                             raise ValueError(
