@@ -85,7 +85,7 @@ class CatalogPsfFitterConfig(CatalogFitterConfig):
 
     def make_psf_model(
         self,
-        component_group_fluxes: list[list[Fluxes]] = None,
+        component_group_fluxes: list[list[Fluxes]] | None = None,
     ) -> [g2f.PsfModel, list[g2f.Prior]]:
         """Make a PsfModel object for a given source.
 
@@ -114,7 +114,7 @@ class CatalogPsfFitterConfig(CatalogFitterConfig):
                 for component_group in self.model.component_groups.values()
             ]
 
-        psf_model, priors = self.model.make_psf_model(component_group_fluxes=component_group_fluxes)
+        psf_model, _ = self.model.make_psf_model(component_group_fluxes=component_group_fluxes)
         return psf_model
 
     def schema_configurable(self) -> list[ColumnInfo]:
