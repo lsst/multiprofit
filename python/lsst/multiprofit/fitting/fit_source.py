@@ -81,7 +81,7 @@ class CatalogExposureSourcesABC(CatalogExposureABC):
         """
 
     @abstractmethod
-    def get_source_observation(self, source: Mapping[str, Any], **kwargs: Any) -> g2f.ObservationD:
+    def get_source_observation(self, source: Mapping[str, Any], **kwargs: Any) -> g2f.ObservationD | None:
         """Get the Observation for a given source row.
 
         Parameters
@@ -96,7 +96,7 @@ class CatalogExposureSourcesABC(CatalogExposureABC):
         -------
         observation : `lsst.gauss2d.fit.Observation`
             An Observation object with suitable data for fitting parametric
-            models of the source.
+            models of the source, or None if the observation cannot be fit.
         """
 
 
@@ -138,6 +138,11 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
             The resulting data object.
         psf_models
             A list of psf_models, one per catexp.
+
+        Notes
+        -----
+        Only observations with good data and valid PSF models will be
+        returned; bad data will be excluded from the return values.
         """
         observations = []
         psf_models = []
@@ -145,6 +150,8 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
         for catexp in catexps:
             source = catexp.get_catalog()[idx_row]
             observation = catexp.get_source_observation(source)
+            # If the observation or PSF model is bad enough that it cannot be
+            # fit, do not add it to the data.
             if observation is not None:
                 psf_model = catexp.get_psf_model(source)
                 if psf_model is not None:
