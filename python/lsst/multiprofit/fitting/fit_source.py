@@ -391,9 +391,37 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         catalog_multi: Sequence,
         catexps: list[CatalogExposureSourcesABC],
         config_data: CatalogSourceFitterConfigData,
-    ):
+    ) -> None:
+        """Copy centroid errors from an input catalog.
+
+        This method exists to support fitting models with fixed centroids
+        derived from an input catalog. Implementers can simply copy an
+        existing column into the results catalog or use the data as needed;
+        however, there is no reasonable default implementation.
+
+        Parameters
+        ----------
+        columns_cenx_err_copy
+            X-axis result centroid columns to copy errors for.
+        columns_ceny_err_copy
+            Y-axis result centroid columns to copy errors for.
+        results
+            The table of fit results to copy errors into.
+        catalog_multi
+            The input multiband catalog.
+        catexps
+            The input data.
+        config_data
+            The fitter config and data.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if columns need to be copied but no implementation is
+            available.
+        """
         if columns_cenx_err_copy or columns_ceny_err_copy:
-            raise RuntimeError(
+            raise NotImplementedError(
                 f"Fitter of {type(self)=} got {columns_cenx_err_copy=} and/or {columns_ceny_err_copy=}"
                 f" but has not overriden copy_centroid_errors"
             )
