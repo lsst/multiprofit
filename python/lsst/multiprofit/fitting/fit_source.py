@@ -156,6 +156,7 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
                 psf_model = catexp.get_psf_model(source)
                 if psf_model is not None:
                     observations.append(observation)
+                    # PSF model parameters cannot be fit along with sources
                     for param in get_params_uniq(psf_model):
                         param.fixed = True
                     psf_models.append(psf_model)
