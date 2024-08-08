@@ -1,0 +1,10 @@
+astropy
+lsst-gauss2d
+lsst-gauss2d-fit
+lsst-pex-config
+lsst-utils
+matplotlib
+numpy
+pydantic
+pytest
+scipy
