@@ -167,8 +167,26 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
     def make_sources(
         self,
         channels: Iterable[g2f.Channel],
-        source_fluxes: list[list[list[Fluxes]]] = None,
-    ) -> tuple[list[g2f.Source], list[g2f.Prior], g2f.LimitsD, g2f.LimitsD,]:
+        source_fluxes: list[list[list[Fluxes]]] | None = None,
+    ) -> tuple[list[g2f.Source], list[g2f.Prior]]:
+        """Make initialized sources given channels using `self.config_model`.
+
+        Parameters
+        ----------
+        channels
+            The channels to initialize fluxes for.
+        source_fluxes
+            A list of fluxes by channel for each component group in each
+            source. The default is to initialize using
+            `ComponentGroupConfig.get_fluxes_default`.
+
+        Returns
+        -------
+        sources
+            The list of initialized sources.
+        priors
+            The list of priors.
+        """
         n_sources = len(self.config_model.sources)
         if source_fluxes is None:
             source_fluxes = [None] * n_sources
