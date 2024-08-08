@@ -375,6 +375,52 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         title="A Modeller instance to use for fitting.",
     )
 
+    def _get_columns_params_radec(
+        self,
+        params_radec: dict[str, tuple[g2f.CentroidXParameterD, g2f.CentroidYParameterD]],
+        compute_errors: bool,
+    ) -> tuple[list[tuple[str, str, str, str]], list[tuple[str, str, str, str, str, str]]]:
+        """Get a list of the columns needed for conversion of x/y centroid
+        parameters into ra/dec.
+
+        Parameters
+        ----------
+        params_radec
+            Dict of tuple of x, y parameter objects by name.
+        compute_errors
+            Whether errors will be computed.
+
+        Returns
+        -------
+        columns_params_radec
+            Column names for RA, dec, x, and y.
+        columns_params_radec_err
+            Column names for RA_err, dec_err, x, y, x_err, y_err.
+        """
+        columns_params_radec = []
+        columns_params_radec_err = []
+
+        for key_base, (param_cen_x, param_cen_y) in params_radec.items():
+            if param_cen_y is None:
+                raise RuntimeError(
+                    f"Fitter failed to find corresponding cen_y param for {key_base=}; is it fixed?"
+                )
+            columns_params_radec.append(
+                (f"{key_base}cen_ra", f"{key_base}cen_dec", f"{key_base}cen_x", f"{key_base}cen_y")
+            )
+            if compute_errors:
+                columns_params_radec_err.append(
+                    (
+                        f"{key_base}cen_ra_err",
+                        f"{key_base}cen_dec_err",
+                        f"{key_base}cen_x",
+                        f"{key_base}cen_y",
+                        f"{key_base}cen_x_err",
+                        f"{key_base}cen_y_err",
+                    )
+                )
+        return columns_params_radec, columns_params_radec_err
+
     @staticmethod
     def _get_logger():
         logging.basicConfig()
@@ -382,6 +428,31 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         logger.level = logging.INFO
 
         return logger
+
+    def _validate_errors_expected(self, config: CatalogSourceFitterConfig) -> None:
+        """Check that self.errors_expected is set correctly.
+
+        Parameters
+        ----------
+        config
+            The fitting configuration.
+
+        Raises
+        ------
+        ValueError
+            Raised if the configuration is invalid.
+        """
+        if len(self.errors_expected) != len(config.flag_errors):
+            raise ValueError(f"{self.errors_expected=} keys not same len as {config.flag_errors=}")
+        errors_bad = {}
+        errors_recast = {}
+        for error_name, error_type in self.errors_expected.items():
+            if error_type in errors_recast:
+                errors_bad[error_name] = error_type
+            else:
+                errors_recast[error_type] = error_name
+        if errors_bad:
+            raise ValueError(f"{self.errors_expected=} keys contain duplicates from {config.flag_errors=}")
 
     def copy_centroid_errors(
         self,
@@ -468,22 +539,11 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         if logger is None:
             logger = self._get_logger()
 
+        config = config_data.config
+        self._validate_errors_expected(config)
         self.validate_fit_inputs(
             catalog_multi=catalog_multi, catexps=catexps, config_data=config_data, logger=logger, **kwargs
         )
-        config = config_data.config
-
-        if len(self.errors_expected) != len(config.flag_errors):
-            raise ValueError(f"{self.errors_expected=} keys not same len as {config.flag_errors=}")
-        errors_bad = {}
-        errors_recast = {}
-        for error_name, error_type in self.errors_expected.items():
-            if error_type in errors_recast:
-                errors_bad[error_name] = error_type
-            else:
-                errors_recast[error_type] = error_name
-        if errors_bad:
-            raise ValueError(f"{self.errors_expected=} keys contain duplicates from {config.flag_errors=}")
 
         channels = self.get_channels(catexps)
         model_sources, priors = config_data.sources_priors
@@ -495,21 +555,24 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         columns_param_fixed: dict[str, tuple[g2f.ParameterD, float]] = {}
         columns_param_free: dict[str, tuple[g2f.ParameterD, float]] = {}
         columns_param_flux: dict[str, g2f.IntegralParameterD] = {}
-        params_radec = {}
+        params_cen_x: dict[str, g2f.CentroidYParameterD] = {}
+        params_cen_y: dict[str, g2f.CentroidYParameterD] = {}
         columns_err = []
 
-        errors_hessian = config.compute_errors == "INV_HESSIAN"
-        errors_hessian_bestfit = config.compute_errors == "INV_HESSIAN_BESTFIT"
-        compute_errors = errors_hessian or errors_hessian_bestfit
+        errors_hessian: bool = config.compute_errors == "INV_HESSIAN"
+        errors_hessian_bestfit: bool = config.compute_errors == "INV_HESSIAN_BESTFIT"
+        compute_errors: bool = errors_hessian or errors_hessian_bestfit
 
         columns_cenx_err_copy = []
         columns_ceny_err_copy = []
 
+        # Add each param to appropriate and more specific pre-computed lists
         for key, param in params.items():
             key_full = f"{prefix}{key}"
             is_cenx = isinstance(param, g2f.CentroidXParameterD)
             is_ceny = isinstance(param, g2f.CentroidYParameterD)
 
+            # Add the corresponding error key to the appropriate list
             if compute_errors:
                 if param.free:
                     columns_err.append(f"{key_full}_err")
@@ -518,6 +581,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                 elif is_ceny:
                     columns_ceny_err_copy.append(f"{key_full}_err")
 
+            # Add this param to the appropriate dict
             (columns_param_fixed if param.fixed else columns_param_free)[key_full] = (
                 param,
                 config_data.config.centroid_pixel_offset if (is_cenx or is_ceny) else 0,
@@ -526,42 +590,19 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                 columns_param_flux[key_full] = param
             elif config.convert_cen_xy_to_radec:
                 if is_cenx:
-                    params_radec[f"{key_full[:-5]}"] = [param, None]
+                    params_cen_x[f"{key_full[:-5]}"] = param
                 elif is_ceny:
-                    params_radec[f"{key_full[:-5]}"][1] = param
+                    params_cen_y[f"{key_full[:-5]}"] = param
 
         if config.convert_cen_xy_to_radec:
-            columns_params_radec = []
-            columns_params_radec_err = []
+            assert params_cen_x.keys() == params_cen_y.keys()
+            columns_params_radec, columns_params_radec_err = self._get_columns_params_radec(
+                {k: (x, params_cen_y[k]) for k, x in params_cen_x.items()}, compute_errors
+            )
 
-            for key_base, (param_cen_x, param_cen_y) in params_radec.items():
-                if param_cen_y is None:
-                    raise RuntimeError(
-                        f"Fitter failed to find corresponding cen_y param for {key_base=}; is it fixed?"
-                    )
-                columns_params_radec.append(
-                    (f"{key_base}cen_ra", f"{key_base}cen_dec", f"{key_base}cen_x", f"{key_base}cen_y")
-                )
-                if compute_errors:
-                    columns_params_radec_err.append(
-                        (
-                            f"{key_base}cen_ra_err",
-                            f"{key_base}cen_dec_err",
-                            f"{key_base}cen_x",
-                            f"{key_base}cen_y",
-                            f"{key_base}cen_x_err",
-                            f"{key_base}cen_y_err",
-                        )
-                    )
-
+        # Setup the results table with correct column names
         columns = config.schema([channel.name for channel in channels.values()])
         keys = [column.key for column in columns]
-        idx_flag_first = keys.index("unknown_flag")
-        idx_flag_last = (
-            next(iter(idx for idx, key in enumerate(keys[idx_flag_first:]) if key.endswith("cen_x")))
-            + idx_flag_first
-        )
-        assert idx_flag_last > idx_flag_first
 
         n_rows = len(catalog_multi)
         dtypes = [(f'{prefix if col.key != config.column_id else ""}{col.key}', col.dtype) for col in columns]
@@ -571,6 +612,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             units=[x.unit for x in columns],
             meta=meta,
         )
+
+        # Copy centroid error columns into results ( if needed)
         self.copy_centroid_errors(
             columns_cenx_err_copy=columns_cenx_err_copy,
             columns_ceny_err_copy=columns_ceny_err_copy,
@@ -582,6 +625,13 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
 
         # Validate that the columns are in the right order
         # assert because this is a logic error if it fails
+        idx_flag_first = keys.index("unknown_flag")
+        idx_flag_last = (
+            next(iter(idx for idx, key in enumerate(keys[idx_flag_first:]) if key.endswith("cen_x")))
+            + idx_flag_first
+        )
+        assert idx_flag_last > idx_flag_first
+
         for idx in range(idx_flag_first, idx_flag_last):
             column = columns[idx]
             dtype = results.columns[idx].dtype
@@ -596,6 +646,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         fitInputs = FitInputsDummy()
         plot = False
 
+        # Configure default options for calls to compute_variances
+        # keys are for values of return_negative
         kwargs_err_default = {
             True: {
                 "options": g2f.HessianOptions(findiff_add=1e-3, findiff_frac=1e-3),
@@ -607,6 +659,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         range_idx = range(n_rows)
 
         # TODO: Do this check with dummy data
+        # It might not work with real data if the first row is bad
         # data, psf_models = config.make_model_data(
         #     idx_row=range_idx[0], catexps=catexps)
         # model = g2f.ModelD(data=data, psfmodels=psf_models,
@@ -668,9 +721,13 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                     param.value_transformed = value
                     results[key][idx] = param.value + offset
 
+                # Also add any offset to the fixed parameters
+                # (usually centroids, if any)
                 for key, (param, offset) in columns_param_fixed.items():
                     results[key][idx] = param.value + offset
 
+                # Do a final linear fit
+                # If the nonlinear fit is good, the values won't change much
                 if config.fit_linear_final:
                     loglike_init, loglike_new = self.modeller.fit_model_linear(
                         model=model, ratio_min=0.01, validate=True
@@ -702,6 +759,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                             errors.append((errors_iter, np.sum(~(errors_iter > 0))))
                         except Exception:
                             pass
+                    # If computing errors from the Jacobian didn't work, or if
+                    # it was disabled in the config, try the Hessian
                     if errors_iter is None:
                         img_data_old = []
                         if errors_hessian_bestfit:
@@ -711,6 +770,9 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                             )
                             model_eval.setup_evaluators(evaluatormode=g2f.EvaluatorMode.image)
                             model_eval.evaluate()
+                            # Compute the errors by setting the data to the
+                            # best-fit model (a quasi-parametric bootstrap
+                            # with one iteration)
                             for obs, output in zip(model_eval.data, model_eval.outputs):
                                 img_data_old.append(obs.image.data.copy())
                                 img = obs.image.data
@@ -720,6 +782,11 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                                 # + rng.standard_normal(img.size)*(
                                 #   obs.sigma_inv.data.flat)
 
+                        # Try without forcing all of the Hessian terms to be
+                        # negative first. At the optimum they should be, but
+                        # in practice the best-fit values are always at least
+                        # a little off and so the sign is equally likely to be
+                        # positive as negative.
                         for return_negative in (False, True):
                             kwargs_err = kwargs_err_default[return_negative]
                             if errors and errors[-1][1] == 0:
@@ -744,18 +811,19 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                                     errors.append((errors_iter, np.sum(~(errors_iter > 0))))
                                 except Exception:
                                     pass
-
+                        # Return the data to its original noisy values
+                        # (it was replaced by the model earlier)
                         if errors_hessian_bestfit:
                             for obs, img_datum_old in zip(model.data, img_data_old):
                                 obs.image.data.flat = img_datum_old.flat
-
+                    # Save and optionally plot the errors
                     if errors:
                         idx_min = np.argmax([err[1] for err in errors])
                         errors = errors[idx_min][0]
                         if plot:
                             errors_plot = np.clip(errors, 0, 1000)
                             errors_plot[~np.isfinite(errors_plot)] = 0
-                            from .plots import ErrorValues, plot_loglike
+                            from ..plotting import ErrorValues, plot_loglike
 
                             try:
                                 plot_loglike(model, errors={"err": ErrorValues(values=errors_plot)})
@@ -765,6 +833,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
 
                         for value, column_err in zip(errors, columns_err):
                             results[column_err][idx] = value
+
+                        # Convert the x/y errors to ra/dec errors
                         if config.convert_cen_xy_to_radec:
                             for (
                                 key_ra_err,
