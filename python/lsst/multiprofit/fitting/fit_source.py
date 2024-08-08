@@ -430,7 +430,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         self,
         catalog_multi: Sequence,
         catexps: list[CatalogExposureSourcesABC],
-        config_data: CatalogSourceFitterConfigData = None,
+        config_data: CatalogSourceFitterConfigData | None = None,
         logger: logging.Logger = None,
         **kwargs: Any,
     ) -> astropy.table.Table:
