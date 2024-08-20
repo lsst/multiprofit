@@ -635,11 +635,14 @@ class CatalogPsfFitter:
                 if column:
                     row[f"{prefix}{column}"] = True
                     logger.info(
-                        f"{id_source=} ({idx}/{n_rows}) PSF fit failed with not unexpected" f" exception={e}"
+                        f"{id_source=} ({idx}/{n_rows}) PSF fit failed with known exception={e}"
                     )
                 else:
                     row[f"{prefix}unknown_flag"] = True
-                    logger.info(f"{id_source=} ({idx}/{n_rows}) PSF fit failed with unexpected exception={e}")
+                    logger.warning(
+                        f"{id_source=} ({idx}/{n_rows}) PSF fit failed with unexpected exception={e}",
+                        exc_info=1,
+                    )
 
         return results
 
