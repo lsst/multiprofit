@@ -65,13 +65,13 @@ class CatalogPsfFitterConfig(CatalogFitterConfig):
             component_groups={
                 "": ComponentGroupConfig(
                     components_gauss={
-                        "comp1": GaussianComponentConfig(
+                        "gauss1": GaussianComponentConfig(
                             size_x=ParameterConfig(value_initial=1.5),
                             size_y=ParameterConfig(value_initial=1.5),
                             fluxfrac=FluxFractionParameterConfig(value_initial=0.5),
                             flux=FluxParameterConfig(value_initial=1.0, fixed=True),
                         ),
-                        "comp2": GaussianComponentConfig(
+                        "gauss2": GaussianComponentConfig(
                             size_x=ParameterConfig(value_initial=3.0),
                             size_y=ParameterConfig(value_initial=3.0),
                             fluxfrac=FluxFractionParameterConfig(value_initial=1.0, fixed=True),

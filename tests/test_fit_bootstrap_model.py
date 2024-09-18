@@ -88,14 +88,14 @@ def config_fitter_psfs(channels) -> dict[g2f.Channel, CatalogExposurePsfBootstra
                             ),
                         },
                         components_gauss={
-                            "comp1": GaussianComponentConfig(
+                            "gauss1": GaussianComponentConfig(
                                 flux=FluxParameterConfig(value_initial=1.0, fixed=True),
                                 fluxfrac=FluxFractionParameterConfig(value_initial=0.5, fixed=False),
                                 size_x=ParameterConfig(value_initial=1.5 + 0.1 * idx),
                                 size_y=ParameterConfig(value_initial=1.7 + 0.13 * idx),
                                 rho=ParameterConfig(value_initial=-0.035 - 0.007 * idx),
                             ),
-                            "comp2": GaussianComponentConfig(
+                            "gauss2": GaussianComponentConfig(
                                 size_x=ParameterConfig(value_initial=3.1 + 0.24 * idx),
                                 size_y=ParameterConfig(value_initial=2.7 + 0.16 * idx),
                                 rho=ParameterConfig(value_initial=0.06 + 0.012 * idx),
