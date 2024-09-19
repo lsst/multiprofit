@@ -73,6 +73,7 @@ def get_params_uniq(parametric: g2f.Parametric, **kwargs: Any) -> list[g2f.Param
 def set_config_from_dict(
     config: pexConfig.Config | pexConfig.dictField.Dict | pexConfig.configDictField.ConfigDict | dict,
     overrides: dict[str, Any],
+    initialize_none: bool = False,
 ) -> None:
     """Set `lsst.pex.config` params from a dict.
 
@@ -92,8 +93,25 @@ def set_config_from_dict(
     for key, value in overrides.items():
         if isinstance(value, dict):
             # Note that this only works on a ConfigDict if a value is set
-            attr = config[key] if is_config_dict else getattr(config, key)
-            set_config_from_dict(attr, value)
+            attr = config.get(key) if is_config_dict else getattr(config, key)
+            if attr is None and value is not None:
+                if initialize_none:
+                    if is_config_dict:
+                        attr = config._field.itemtype()
+                        config[key] = attr
+                    else:
+                        attr = getattr(config.__class__, key)
+                        if isinstance(attr, pexConfig.ConfigDictField):
+                            attr = {key: attr.itemtype() for key in value}
+                        elif isinstance(attr, pexConfig.ConfigField):
+                            attr = attr.dtype()
+                        else:
+                            raise RuntimeError(f"Unexpected {attr=} of type={type(attr)} for {key=}")
+                        setattr(config, key, attr)
+                    attr = config[key] if is_config_dict else getattr(config, key)
+                else:
+                    raise ValueError(f"{config=}.{key} is None and can't be set")
+            set_config_from_dict(attr, value, initialize_none=initialize_none)
         else:
             try:
                 if is_config_dict:
