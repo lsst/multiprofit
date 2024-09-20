@@ -65,13 +65,13 @@ class CatalogPsfFitterConfig(CatalogFitterConfig):
             component_groups={
                 "": ComponentGroupConfig(
                     components_gauss={
-                        "comp1": GaussianComponentConfig(
+                        "gauss1": GaussianComponentConfig(
                             size_x=ParameterConfig(value_initial=1.5),
                             size_y=ParameterConfig(value_initial=1.5),
                             fluxfrac=FluxFractionParameterConfig(value_initial=0.5),
                             flux=FluxParameterConfig(value_initial=1.0, fixed=True),
                         ),
-                        "comp2": GaussianComponentConfig(
+                        "gauss2": GaussianComponentConfig(
                             size_x=ParameterConfig(value_initial=3.0),
                             size_y=ParameterConfig(value_initial=3.0),
                             fluxfrac=FluxFractionParameterConfig(value_initial=1.0, fixed=True),
@@ -635,11 +635,14 @@ class CatalogPsfFitter:
                 if column:
                     row[f"{prefix}{column}"] = True
                     logger.info(
-                        f"{id_source=} ({idx}/{n_rows}) PSF fit failed with not unexpected" f" exception={e}"
+                        f"{id_source=} ({idx}/{n_rows}) PSF fit failed with known exception={e}"
                     )
                 else:
                     row[f"{prefix}unknown_flag"] = True
-                    logger.info(f"{id_source=} ({idx}/{n_rows}) PSF fit failed with unexpected exception={e}")
+                    logger.warning(
+                        f"{id_source=} ({idx}/{n_rows}) PSF fit failed with unexpected exception={e}",
+                        exc_info=1,
+                    )
 
         return results
 

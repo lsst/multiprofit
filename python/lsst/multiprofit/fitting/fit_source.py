@@ -869,7 +869,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                 else:
                     row[f"{prefix}unknown_flag"] = True
                     logger.warning(
-                        f"{id_source=} ({idx=}/{n_rows}) fit failed with unexpected exception={e}", exc_info=1
+                        f"{id_source=} ({idx=}/{n_rows}) fit failed with unexpected exception={e}",
+                        exc_info=1,
                     )
         return results
 
