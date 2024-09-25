@@ -105,6 +105,11 @@ class CatalogExposureSourcesABC(CatalogExposureABC):
 class CatalogSourceFitterConfig(CatalogFitterConfig):
     """Configuration for the MultiProFit profile fitter."""
 
+    apply_centroid_pixel_offset = pexConfig.Field[bool](
+        doc="Whether to apply the centroid pixel offset to all centroid pixel columns. Should be False if "
+            "fitting in sky or other non-pixel coordinates",
+        default=True,
+    )
     centroid_pixel_offset = pexConfig.Field[float](
         doc="Number to add to MultiProFit centroids (bottom-left corner is 0,0) to convert to catalog"
         " coordinates (e.g. set to -0.5 if the bottom-left corner is -0.5, -0.5)",
@@ -799,10 +804,11 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                 elif is_ceny:
                     columns_ceny_err_copy.append(f"{key_full}{suffix_err}")
 
+            offset_cen = config_data.config.centroid_pixel_offset if config.apply_centroid_pixel_offset else 0
             # Add this param to the appropriate dict
             (columns_param_fixed if param.fixed else columns_param_free)[key_full] = (
                 param,
-                config_data.config.centroid_pixel_offset if (is_cenx or is_ceny) else 0,
+                offset_cen if (is_cenx or is_ceny) else 0,
             )
             if isinstance(param, g2f.IntegralParameterD):
                 columns_param_flux[key_full] = param
