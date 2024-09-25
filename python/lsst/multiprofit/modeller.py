@@ -777,7 +777,7 @@ class Modeller:
         results = FitResult(inputs=fitinputs, config=config)
         time_init = time.process_time()
         # The initial evaluate is needed to fill in jac for the next line
-        _ll_init = model.evaluate()  # noqa: F841
+        _ll_init = model.evaluate(print=printout)  # noqa: F841
         x_scale_jac_clipped = np.clip(1.0 / (np.sum(jac**2, axis=0) ** 0.5), 1e-5, 1e19)
         result_opt = spopt.least_squares(
             residual_func,
