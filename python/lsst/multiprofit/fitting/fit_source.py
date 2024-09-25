@@ -470,11 +470,15 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
                     if not config_comp.rho.fixed:
                         parameters[key_rho] = component.ellipse.rho_param
                     if not config_comp.flux.fixed:
-                        # TODO: return this to component.integralmodel
-                        # when binding for g2f.FractionalIntegralModel is fixed
-                        params_flux = get_params_uniq(component, fixed=False, nonlinear=False)
-                        if len(params_flux) != n_channels:
-                            raise ValueError(f"{params_flux=} len={len(params_flux)} != {n_channels=}")
+                        if isinstance(component.integralmodel, g2f.LinearIntegralModel):
+                            params_flux = component.integralmodel.parameters()
+                            if component.integralmodel.channels != self.channels:
+                                raise ValueError(f"{params_flux=} len={len(params_flux)} != {n_channels=}")
+                        # TODO: Drop this when DM-44344 is fixed
+                        else:
+                            params_flux = get_params_uniq(component, fixed=False, nonlinear=False)
+                            if len(params_flux) != n_channels:
+                                raise ValueError(f"{params_flux=} len={len(params_flux)} != {n_channels=}")
                         for channel, param_flux in zip(self.channels, params_flux):
                             key_flux = config.get_key_flux(label=prefix_comp, band=channel.name)
                             parameters[key_flux] = param_flux
