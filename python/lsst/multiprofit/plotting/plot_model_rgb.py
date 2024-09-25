@@ -109,20 +109,30 @@ def plot_model_rgb(
                     bands.append(band)
                     weights[band] = 1.0
 
-    n_data = len(model.data)
     has_model = model is not None
+    n_data = len(weights)
     observations = {}
     models = {}
 
     if has_model and (n_data < 3):
         if n_data == 1:
             # pretend this is three bands
-            obs, output_data = model.data[0], model.outputs[0].data
-            band = obs.channel.name
+            idx_data = None
+            band = next(iter(weights.keys()))
+            for idx, datum in enumerate(model.data):
+                if datum.channel.name == band:
+                    idx_data = idx
+                    break
+            if idx_data is None:
+                raise ValueError(
+                    f"{band=} from {weights=} not found in {[datum.channel.name for datum in model.data]=}"
+                )
+            obs, output_data = model.data[idx_data], model.outputs[idx_data].data
+            weight = weights[band]
             weights = {}
             for idx in range(1, 4):
                 key = f"{band}{idx}"
-                weights[key] = 1.0
+                weights[key] = weight
                 observations[key] = obs
                 models[key] = output_data
         elif n_data == 2:
