@@ -1055,7 +1055,7 @@ class Modeller:
             else:
                 # The initial evaluate will fill in jac for the next line
                 # _ll_init is assigned just for convenient debugging
-                _ll_init = model.evaluate()  # noqa: F841
+                _ll_init = model.evaluate(print=printout)  # noqa: F841
                 x_scale_jac_clipped = np.clip(1.0 / (np.sum(jac**2, axis=0) ** 0.5), 1e-5, 1e19)
                 result_opt = spopt.least_squares(
                     residual_scipy,
