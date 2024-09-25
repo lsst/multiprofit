@@ -766,6 +766,12 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             catalog_multi=catalog_multi, catexps=catexps, config_data=config_data, logger=logger, **kwargs
         )
 
+        channels = self.get_channels(catexps)
+        if list(channels.values()) != config_data.channels:
+            raise ValueError(
+                f"self.get_channels(catexps)={channels} != {config_data.channels=};"
+                f" config_data.channels must match the order of channels in catexps"
+            )
         model_sources, priors = config_data.sources_priors
 
         # TODO: If free Observation params are ever supported, make null Data
