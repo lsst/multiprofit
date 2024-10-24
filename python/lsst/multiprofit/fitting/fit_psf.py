@@ -634,15 +634,19 @@ class CatalogPsfFitter:
                 column = self.errors_expected.get(e.__class__, "")
                 if column:
                     row[f"{prefix}{column}"] = True
-                    logger.info(
+                    logger.debug(
                         f"{id_source=} ({idx}/{n_rows}) PSF fit failed with known exception={e}"
                     )
                 else:
                     row[f"{prefix}unknown_flag"] = True
-                    logger.warning(
+                    logger.info(
                         f"{id_source=} ({idx}/{n_rows}) PSF fit failed with unexpected exception={e}",
                         exc_info=1,
                     )
+
+        n_unknown = np.sum(row[f"{prefix}unknown_flag"])
+        if n_unknown > 0:
+            logger.warning(f"{n_unknown}/{n_rows} PSF fits failed with unexpected exceptions")
 
         return results
 
