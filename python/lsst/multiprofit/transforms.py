@@ -150,6 +150,6 @@ transforms_ref = {
         name=f"ref_logit_rho[{limits_ref['rho'].min}, {limits_ref['rho'].max}]",
     ),
     "logit_axrat": get_logit_limited(1e-4, 1, name="ref_logit_axrat[1e-4, 1]"),
-    "logit_axrat_prior": get_logit_limited(-0.001, 1.001, name="ref_logit_axrat_prior[-0.001, 1.001]"),
+    "logit_axrat_prior": get_logit_limited(-0.0001, 1.1, name="ref_logit_axrat_prior[-0.0001, 1.1]"),
     "logit_sersic": get_logit_limited(0.49, 6.01, name="ref_logit_sersic[0.49, 6.01]"),
 }
