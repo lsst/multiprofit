@@ -681,8 +681,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                     model,
                     source_multi,
                     catexps,
-                    values_init,
-                    centroid_pixel_offset=config_data.config.centroid_pixel_offset,
+                    config_data=config_data,
+                    values_init=values_init,
                 )
 
                 # Caches the jacobian residual if the data size is unchanged
@@ -972,8 +972,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         model: g2f.ModelD,
         source: Mapping[str, Any],
         catexps: list[CatalogExposureSourcesABC],
+        config_data: CatalogSourceFitterConfigData,
         values_init: Mapping[g2f.ParameterD, float] | None = None,
-        centroid_pixel_offset: float = 0,
         **kwargs: Any,
     ) -> None:
         """Initialize a Model for a single source row.
@@ -987,11 +987,10 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             corresponding source catalog for initialization.
         catexps
             A list of (source and psf) catalog-exposure pairs.
+        config_data
+            Configuration settings and data for fitting and output.
         values_init
             Initial parameter values from the model configuration.
-        centroid_pixel_offset
-            The value of the offset required to convert pixel centroids from
-            MultiProFit coordinates to catalog coordinates.
         **kwargs
             Additional keyword arguments that cannot be required for fitting.
         """
