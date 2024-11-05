@@ -211,9 +211,20 @@ class CatalogSourceFitterBootstrap(CatalogSourceFitterABC, pydantic.BaseModel):
         cen_x = (min_x + max_x) / 2.0
         cen_y = (min_y + max_y) / 2.0
 
+        # One could consider setting initial values from estimated moments
+        # here, like a real fitter would
+
+        # An R_eff larger than the box size is problematic. This should also
+        # stop unreasonable size proposals; a log10 transform isn't enough.
+        limits_size = max(5.0, 2.0 * np.hypot(max_x - min_x, max_y - min_y))
+        limits_xy = (1e-6, limits_size)
         params_limits_init = {
             g2f.CentroidXParameterD: (cen_x, (min_x, max_x)),
             g2f.CentroidYParameterD: (cen_y, (min_y, max_y)),
+            g2f.ReffXParameterD: (None, limits_xy),
+            g2f.ReffYParameterD: (None, limits_xy),
+            g2f.SigmaXParameterD: (None, limits_xy),
+            g2f.SigmaYParameterD: (None, limits_xy),
         }
 
         params_free = get_params_uniq(model, fixed=False)
