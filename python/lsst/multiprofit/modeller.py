@@ -397,6 +397,11 @@ class FitResult(pydantic.BaseModel):
         None,
         title="The best-fit parameter array (un-transformed)",
     )
+    params_free_missing: tuple[g2f.ParameterD, ...] | None = pydantic.Field(
+        None,
+        title="Free parameters that were fixed during fitting - usually an"
+              " IntegralParameterD for a band with missing data",
+    )
     n_eval_resid: int = pydantic.Field(0, title="Total number of self-reported residual function evaluations")
     n_eval_func: int = pydantic.Field(
         0, title="Total number of optimizer-reported fitness function evaluations"
@@ -790,6 +795,8 @@ class Modeller:
         )
         results.time_run = time.process_time() - time_init
         results.result = result_opt
+
+        x_best = result_opt.x
         if params_free_sorted_missing:
             params_best = []
             for param in params_free_sorted_all:
@@ -797,14 +804,15 @@ class Modeller:
                     params_best.append(param.value)
                     param.fixed = False
                 else:
-                    params_best.append(result_opt.x[offsets_params[param] - 1])
+                    params_best.append(x_best[offsets_params[param] - 1])
             results.params_best = tuple(params_best)
             results.params = params_free_sorted_all
         else:
             results.params_best = tuple(
-                result_opt.x[offsets_params[param] - 1] for param in params_free_sorted
+                x_best[offsets_params[param] - 1] for param in params_free_sorted
             )
             results.params = params_free_sorted
+        results.params_free_missing = tuple(params_free_sorted_missing)
         results.n_eval_func = result_opt.nfev
         results.n_eval_jac = result_opt.njev if result_opt.njev else 0
 
