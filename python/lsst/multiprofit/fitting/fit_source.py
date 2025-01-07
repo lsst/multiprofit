@@ -993,6 +993,26 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         return model
 
     def get_model_radec(self, source: Mapping[str, Any], cen_x: float, cen_y: float) -> tuple[float, float]:
+        """Return right ascension and declination values for a source.
+
+        Implementing this method is necessary only when fitting data with
+        accompanying WCS.
+
+        Parameters
+        ----------
+        source
+            A mapping with fields expected to be populated in the
+            corresponding source catalog.
+        cen_x
+            The x-axis centroid in pixel coordinates.
+        cen_y
+            The y-axis centroid in pixel coordinates.
+
+        Returns
+        -------
+        ra, dec
+            The right ascension and declination.
+        """
         return np.nan, np.nan
 
     @abstractmethod
