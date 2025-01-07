@@ -37,7 +37,7 @@ from collections.abc import Sequence
 import logging
 import sys
 import time
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar, Iterable, TypeAlias
 
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
@@ -430,13 +430,32 @@ class FitResult(pydantic.BaseModel):
     time_run: float = pydantic.Field(0, title="Total runtime spent in fitting, excluding initial setup")
 
 
-def set_params(params: tuple[tuple[int, g2f.ParameterD]], params_new, model_loglike: Model):
-    if not all(~np.isnan(params_new)):
-        raise InvalidProposalError(
-            f"optimizer for {model_loglike=} proposed non-finite {params_new=}"
-        )
+def set_params(params: Iterable[g2f.ParameterD], params_new: Iterable[float], model_loglike: Model):
+    """Set new parameter values from an optimizer proposal.
+
+    Parameters
+    ----------
+    params
+        An iterable of ParameterD instances.
+    params_new
+        An iterable of new untransformed values for params.
+    model_loglike
+        A model instance configured to compute the log-likelihood.
+
+    Raises
+    ------
+    InvalidProposalError
+        Raised if a new value is nan, or if a RuntimeError is raised when
+        setting the new value.
+    RuntimeError
+        Raised if the new transformed value is not finite.
+    """
     try:
-        for param, value in zip(params, params_new):
+        for param, value in zip(params, params_new, strict=True):
+            if np.isnan(value):
+                raise InvalidProposalError(
+                    f"optimizer for {model_loglike=} proposed non-finite {value=} for {param=}"
+                )
             param.value_transformed = value
             if not np.isfinite(param.value):
                 raise RuntimeError(f"{param=} set to (transformed) non-finite {value=}")
@@ -448,12 +467,62 @@ def residual_scipy(
     params_new: np.ndarray,
     model_jacobian: Model,
     model_loglike: Model,
-    params: tuple[tuple[int, g2f.ParameterD]],
+    params: tuple[g2f.ParameterD],
     result: FitResult,
-    jacobian: np.ndarray,
+    jacobian: np.ndarray | None,
     never_evaluate_jacobian: bool = False,
     return_loglike: bool = False,
 ) -> np.ndarray:
+    """Compute the residual for a scipy optimizer.
+
+    Parameters
+    ----------
+    params_new
+        An array of new parameter values.
+    model_jacobian
+        A model instance configured to compute the Jacobian.
+    model_loglike
+        A model instance configured to compute the log-likelihood.
+    params
+        A tuple of the free parameters. The length and order must be identical
+        to params_new.
+    result
+        A FitResult instance to update.
+    jacobian
+        The Jacobian array. Unused in this function.
+    never_evaluate_jacobian
+        If True, the jacobian will never be evaluated, taking precedence
+        over result.config.eval_residual.
+    return_loglike
+        If False, will return the negative of the residual instead of the
+        log-likelihood.
+
+    Returns
+    -------
+    The log-likehood if return_loglike, otherwise the negative of the
+    residual from result.inputs.residual. kwargs are for the convenience of
+    libraries other than scipy and will not be changed by scipy itself.
+
+    Notes
+    -----
+    Scipy requires that this function have the same args as the jacobian
+    function (jacobian_scipy), so unused args must not be removed.
+
+    Scipy generally calls this function every iteration, but only conditionally
+    calls the jacobian_scipy function (e.g. if the proposal is accepted). If
+    users expect proposals to (almost) always be accepted, it is more efficient
+    to compute the Jacobian here (and skip evaluating it again when
+    jacobian_scipy is called), because evaluating model_jacobian also updates
+    the residual array, and so there is no need to evaluate model_loglike.
+
+    To summarize, if never_evaluate_jacobian or config_fit.eval_residual:
+        There is ALWAYS one call to model_jacobian.evaluate,
+        and ZERO calls to model_loglike.evaluate.
+    else:
+        There is always one call to model_loglike.evaluate,
+        and MAYBE one call to model_jacobian.evaluate.
+
+    """
     set_params(params, params_new, model_loglike)
     config_fit = result.config
     fit_linear_iter = config_fit.fit_linear_iter
@@ -461,11 +530,6 @@ def residual_scipy(
         Modeller.fit_model_linear(model_loglike, ratio_min=1e-6)
     time_init = time.process_time()
 
-    # If eval_residual is true, the user thinks it's likely that the
-    # optimizer will choose not to evaluate the Jacobian in some
-    # iterations. If False, evaluate the Jacobian now, which will
-    # also fill in the residual array, and avoid the call to
-    # model_loglike.evaluate
     if never_evaluate_jacobian or config_fit.eval_residual:
         try:
             loglike = model_loglike.evaluate()
@@ -483,13 +547,49 @@ def jacobian_scipy(
     params_new: np.ndarray,
     model_jacobian: Model,
     model_loglike: Model,
-    params: tuple[tuple[int, g2f.ParameterD]],
+    params: tuple[g2f.ParameterD],
     result: FitResult,
     jacobian: np.ndarray,
     always_evaluate_jacobian: bool = False,
 ) -> np.ndarray:
-    # If False, the Jacobian should already have been computed by a
-    # call to residual_scipy.
+    """Compute the Jacobian for a scipy optimizer.
+
+    Parameters
+    ----------
+    params_new
+        An array of new parameter values. Unused here.
+    model_jacobian
+        A model instance configured to compute the Jacobian.
+    model_loglike
+        A model instance configured to compute the log-likelihood. Unused here.
+    params
+        A tuple of the free parameters. Unused here.
+    result
+        A FitResult instance to update.
+    jacobian
+        The Jacobian array. Unused in this function.
+    always_evaluate_jacobian
+        If True, the jacobian will always be evaluated, taking precedence
+        over result.config.eval_residual.
+
+    Returns
+    -------
+    A reference to jacobian, whose values may have been updated.
+
+    Notes
+    -----
+    Scipy requires that this function have the same args as the residual
+    function (residual_scipy), so unused args must not be removed. kwargs are
+    for the convenience of libraries other than scipy and will not be changed
+    by scipy itself.
+
+    Parameter objects and new values are unused here as they will have already
+    been set by the residual funciton.
+
+    Scipy generally does not call this function every iteration. If it is
+    configured to skip evaluating the Jacobian, it is presumed to have been
+    updated by the residual function already.
+    """
     if always_evaluate_jacobian or result.config.eval_residual:
         time_init = time.process_time()
         model_jacobian.evaluate()
