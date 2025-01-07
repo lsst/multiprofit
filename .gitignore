@@ -27,3 +27,4 @@ prof/
 
 # in-source notebooks
 examples/.ipynb_checkpoints
+python/*.dist-info/
