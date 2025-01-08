@@ -596,7 +596,8 @@ class CatalogPsfFitter:
                 if img_psf.size != size:
                     fitInputs = None
                     size = int(img_psf.size)
-                else:
+                # Some algorithms might not even use fitInputs
+                elif fitInputs is not None:
                     fitInputs = fitInputs if not fitInputs.validate_for_model(model) else None
 
                 if config.fit_linear_init:
@@ -620,7 +621,7 @@ class CatalogPsfFitter:
                 results[f"{prefix}n_iter"][idx] = result_full.n_eval_func
                 results[f"{prefix}time_eval"][idx] = result_full.time_eval
                 results[f"{prefix}time_fit"][idx] = result_full.time_run
-                results[f"{prefix}chisq_red"][idx] = np.sum(fitInputs.residual**2) / size
+                results[f"{prefix}chisq_red"][idx] = result_full.chisq_best/size
                 if config.config_fit.eval_residual:
                     results[f"{prefix}n_eval_jac"][idx] = result_full.n_eval_jac
 

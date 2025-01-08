@@ -37,7 +37,7 @@ from collections.abc import Sequence
 import logging
 import sys
 import time
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar, Iterable, TypeAlias
 
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
@@ -64,6 +64,14 @@ try:
     has_fastnnls = True
 except ImportError:
     has_fastnnls = False
+
+try:
+    # TODO: try importlib.util.find_spec
+    import pygmo as pg  # noqa
+
+    has_pygmo = True
+except ImportError:
+    has_pygmo = False
 
 
 Model: TypeAlias = g2f.ModelD | g2f.ModelF
@@ -371,6 +379,14 @@ class ModelFitConfig(pexConfig.Config):
         " Default 0 disables the feature.",
         default=0,
     )
+    optimization_library = pexConfig.ChoiceField[str](
+        doc="The optimization library to use when fitting",
+        allowed={
+            "pygmo": "Pygmo2",
+            "scipy": "scipy.optimize",
+        },
+        default="scipy",
+    )
 
     def validate(self) -> None:
         if not self.fit_linear_iter >= 0:
@@ -382,6 +398,7 @@ class FitResult(pydantic.BaseModel):
 
     model_config: ClassVar[pydantic.ConfigDict] = arbitrary_allowed_config
 
+    chisq_best: float = pydantic.Field(default=0, title="The chi-squared (sum) of the best-fit parameters")
     # TODO: Why does setting default=ModelFitConfig() cause a circular import?
     config: ModelFitConfig = pydantic.Field(None, title="The configuration for fitting")
     inputs: FitInputs | None = pydantic.Field(None, title="The fit input arrays")
@@ -397,6 +414,11 @@ class FitResult(pydantic.BaseModel):
         None,
         title="The best-fit parameter array (un-transformed)",
     )
+    params_free_missing: tuple[g2f.ParameterD, ...] | None = pydantic.Field(
+        None,
+        title="Free parameters that were fixed during fitting - usually an"
+              " IntegralParameterD for a band with missing data",
+    )
     n_eval_resid: int = pydantic.Field(0, title="Total number of self-reported residual function evaluations")
     n_eval_func: int = pydantic.Field(
         0, title="Total number of optimizer-reported fitness function evaluations"
@@ -406,6 +428,279 @@ class FitResult(pydantic.BaseModel):
     )
     time_eval: float = pydantic.Field(0, title="Total runtime spent in model/Jacobian evaluation")
     time_run: float = pydantic.Field(0, title="Total runtime spent in fitting, excluding initial setup")
+
+
+def set_params(params: Iterable[g2f.ParameterD], params_new: Iterable[float], model_loglike: Model):
+    """Set new parameter values from an optimizer proposal.
+
+    Parameters
+    ----------
+    params
+        An iterable of ParameterD instances.
+    params_new
+        An iterable of new untransformed values for params.
+    model_loglike
+        A model instance configured to compute the log-likelihood.
+
+    Raises
+    ------
+    InvalidProposalError
+        Raised if a new value is nan, or if a RuntimeError is raised when
+        setting the new value.
+    RuntimeError
+        Raised if the new transformed value is not finite.
+    """
+    try:
+        for param, value in zip(params, params_new, strict=True):
+            if np.isnan(value):
+                raise InvalidProposalError(
+                    f"optimizer for {model_loglike=} proposed non-finite {value=} for {param=}"
+                )
+            param.value_transformed = value
+            if not np.isfinite(param.value):
+                raise RuntimeError(f"{param=} set to (transformed) non-finite {value=}")
+    except RuntimeError as e:
+        raise InvalidProposalError(f"optimizer for {model_loglike=} proposal generated error={e}")
+
+
+def residual_scipy(
+    params_new: np.ndarray,
+    model_jacobian: Model,
+    model_loglike: Model,
+    params: tuple[g2f.ParameterD],
+    result: FitResult,
+    jacobian: np.ndarray | None,
+    never_evaluate_jacobian: bool = False,
+    return_loglike: bool = False,
+) -> np.ndarray:
+    """Compute the residual for a scipy optimizer.
+
+    Parameters
+    ----------
+    params_new
+        An array of new parameter values.
+    model_jacobian
+        A model instance configured to compute the Jacobian.
+    model_loglike
+        A model instance configured to compute the log-likelihood.
+    params
+        A tuple of the free parameters. The length and order must be identical
+        to params_new.
+    result
+        A FitResult instance to update.
+    jacobian
+        The Jacobian array. Unused in this function.
+    never_evaluate_jacobian
+        If True, the jacobian will never be evaluated, taking precedence
+        over result.config.eval_residual.
+    return_loglike
+        If False, will return the negative of the residual instead of the
+        log-likelihood.
+
+    Returns
+    -------
+    The log-likehood if return_loglike, otherwise the negative of the
+    residual from result.inputs.residual. kwargs are for the convenience of
+    libraries other than scipy and will not be changed by scipy itself.
+
+    Notes
+    -----
+    Scipy requires that this function have the same args as the jacobian
+    function (jacobian_scipy), so unused args must not be removed.
+
+    Scipy generally calls this function every iteration, but only conditionally
+    calls the jacobian_scipy function (e.g. if the proposal is accepted). If
+    users expect proposals to (almost) always be accepted, it is more efficient
+    to compute the Jacobian here (and skip evaluating it again when
+    jacobian_scipy is called), because evaluating model_jacobian also updates
+    the residual array, and so there is no need to evaluate model_loglike.
+
+    To summarize, if never_evaluate_jacobian or config_fit.eval_residual:
+        There is ALWAYS one call to model_jacobian.evaluate,
+        and ZERO calls to model_loglike.evaluate.
+    else:
+        There is always one call to model_loglike.evaluate,
+        and MAYBE one call to model_jacobian.evaluate.
+
+    """
+    set_params(params, params_new, model_loglike)
+    config_fit = result.config
+    fit_linear_iter = config_fit.fit_linear_iter
+    if (fit_linear_iter > 0) and ((result.n_eval_resid + 1) % fit_linear_iter == 0):
+        Modeller.fit_model_linear(model_loglike, ratio_min=1e-6)
+    time_init = time.process_time()
+
+    if never_evaluate_jacobian or config_fit.eval_residual:
+        try:
+            loglike = model_loglike.evaluate()
+        except Exception:
+            loglike = None
+        result.n_eval_resid += 1
+    else:
+        loglike = model_jacobian.evaluate()
+        result.n_eval_jac += 1
+    result.time_eval += time.process_time() - time_init
+    return loglike if return_loglike else -result.inputs.residual
+
+
+def jacobian_scipy(
+    params_new: np.ndarray,
+    model_jacobian: Model,
+    model_loglike: Model,
+    params: tuple[g2f.ParameterD],
+    result: FitResult,
+    jacobian: np.ndarray,
+    always_evaluate_jacobian: bool = False,
+) -> np.ndarray:
+    """Compute the Jacobian for a scipy optimizer.
+
+    Parameters
+    ----------
+    params_new
+        An array of new parameter values. Unused here.
+    model_jacobian
+        A model instance configured to compute the Jacobian.
+    model_loglike
+        A model instance configured to compute the log-likelihood. Unused here.
+    params
+        A tuple of the free parameters. Unused here.
+    result
+        A FitResult instance to update.
+    jacobian
+        The Jacobian array. Unused in this function.
+    always_evaluate_jacobian
+        If True, the jacobian will always be evaluated, taking precedence
+        over result.config.eval_residual.
+
+    Returns
+    -------
+    A reference to jacobian, whose values may have been updated.
+
+    Notes
+    -----
+    Scipy requires that this function have the same args as the residual
+    function (residual_scipy), so unused args must not be removed. kwargs are
+    for the convenience of libraries other than scipy and will not be changed
+    by scipy itself.
+
+    Parameter objects and new values are unused here as they will have already
+    been set by the residual funciton.
+
+    Scipy generally does not call this function every iteration. If it is
+    configured to skip evaluating the Jacobian, it is presumed to have been
+    updated by the residual function already.
+    """
+    if always_evaluate_jacobian or result.config.eval_residual:
+        time_init = time.process_time()
+        model_jacobian.evaluate()
+        result.time_eval += time.process_time() - time_init
+        result.n_eval_jac += 1
+    return jacobian
+
+
+if has_pygmo:
+    class PygmoUDP:
+        """A Pygmo User-Defined Problem for a MultiProFit model.
+
+        Pygmo optimizers take a class with a fitness function
+        (i.e. the negative log-likelihood, although one could use some other
+        arbitrary fitness function if it made snese to do so), with a
+        fitness function and a gradient function returning the derivative of
+        the fitness w.r.t. each free parameters.
+
+        Pygmo optimizers do not appear to use the full residual array or
+        Jacobian the way scipy optimizers do. The gradient of the
+        log-likelihood is cheaper to compute than the full Jacobian; however,
+        using only the gradient of the fitness may cause slower convergence.
+
+        Parameters
+        ----------
+        params
+            A tuple of the free parameters.
+        model_loglike
+            A model configured to compute the log-likelihood.
+        model_loglike_grad
+            A model configured to compute the gradient of the
+            log-likelihood w.r.t. each free parameter.
+        bounds_lower
+            A tuple of the lower bounds of the transformed value for each
+            free parameter in params.
+        bounds_upper
+            A tuple of the upper bounds of the transformed value for each
+            free parameter in params.
+        result
+            A result object to update and read configuration from.
+        """
+
+        def __init__(
+            self,
+            params: tuple[g2f.ParameterD],
+            model_loglike: Model,
+            model_loglike_grad: Model,
+            bounds_lower: tuple[float],
+            bounds_upper: tuple[float],
+            result: FitResult,
+        ):
+            self.params = params
+            self.model_loglike = model_loglike
+            self.model_loglike_grad = model_loglike_grad
+            self.bounds_lower = bounds_lower
+            self.bounds_upper = bounds_upper
+            self.result = result
+
+        def fitness(self, x):
+            loglike = residual_scipy(
+                x,
+                model_jacobian=self.model_loglike_grad,
+                model_loglike=self.model_loglike,
+                params=self.params,
+                result=self.result,
+                jacobian=None,
+                never_evaluate_jacobian=True,
+                return_loglike=True,
+            )
+            return [-sum(loglike),]
+
+        def get_bounds(self):
+            return self.bounds_lower, self.bounds_upper
+
+        def gradient(self, x):
+            set_params(params=self.params, params_new=x, model_loglike=self.model_loglike)
+            time_init = time.process_time()
+            loglike_grad = -np.array(self.model_loglike_grad.compute_loglike_grad())
+            self.result.time_eval += time.process_time() - time_init
+            self.result.n_eval_jac += 1
+            return loglike_grad
+
+        def __deepcopy__(self, memo):
+            """Make a deep copy of a model with a shallow copy of the data
+            which should not be duplicated.
+
+            Pygmo optimizers always make at least one copy of this class, and
+            some (like particle swarm) will make many more. The input data
+            must be shallow copies, both to avoid excess memory usage and
+            because Model instances cannot be deep copied.
+            """
+            fitinputs = FitInputs.from_model(self.model_loglike)
+            model_loglike, model_loglike_grad = (g2f.ModelD(
+                data=model.data,
+                psfmodels=model.psfmodels,
+                sources=model.sources,
+                priors=model.priors,
+            ) for model in (self.model_loglike, self.model_loglike_grad))
+            model_loglike.setup_evaluators(evaluatormode=g2f.EvaluatorMode.loglike)
+            model_loglike_grad.setup_evaluators(evaluatormode=g2f.EvaluatorMode.loglike_grad)
+
+            copied = self.__class__(
+                params=self.params,
+                model_loglike=model_loglike,
+                model_loglike_grad=model_loglike_grad,
+                bounds_lower=self.bounds_lower,
+                bounds_upper=self.bounds_upper,
+                result=FitResult(inputs=fitinputs, config=self.result.config),
+            )
+            memo[id(self)] = copied
+            return copied
 
 
 class Modeller:
@@ -607,84 +902,35 @@ class Modeller:
         if config is None:
             config = ModelFitConfig()
         config.validate()
-        if fitinputs is None:
-            fitinputs = FitInputs.from_model(model)
+
+        use_pygmo = config.optimization_library == "pygmo"
+        model_loglike = g2f.ModelD(
+            data=model.data,
+            psfmodels=model.psfmodels,
+            sources=model.sources,
+            priors=model.priors,
+        ) if (use_pygmo or config.eval_residual) else None
+
+        if use_pygmo:
+            model.setup_evaluators(g2f.EvaluatorMode.loglike_grad, force=True)
+            model_loglike.setup_evaluators(g2f.EvaluatorMode.loglike, force=True)
         else:
-            errors = fitinputs.validate_for_model(model)
-            if errors:
-                newline = "\n"
-                raise ValueError(f"fitinputs validation got errors:\n{newline.join(errors)}")
-
-        def residual_func(
-            params_new: np.ndarray,
-            model_jac: Model,
-            model_loglike: Model,
-            params: tuple[tuple[int, g2f.ParameterD]],
-            result: FitResult,
-            jac: np.ndarray,
-        ) -> np.ndarray:
-            if not all(~np.isnan(params_new)):
-                raise InvalidProposalError(
-                    f"optimizer for {model_loglike=} proposed non-finite {params_new=}"
-                )
-            try:
-                for param, value in zip(params, params_new):
-                    param.value_transformed = value
-                    if not np.isfinite(param.value):
-                        raise RuntimeError(f"{param=} set to (transformed) non-finite {value=}")
-            except RuntimeError as e:
-                raise InvalidProposalError(f"optimizer for {model_loglike=} proposal generated error={e}")
-            config_fit = result.config
-            fit_linear_iter = config_fit.fit_linear_iter
-            if (fit_linear_iter > 0) and ((result.n_eval_resid + 1) % fit_linear_iter == 0):
-                self.fit_model_linear(model_loglike, ratio_min=1e-6)
-            time_init = time.process_time()
-
-            # If eval_residual is true, the user thinks it's likely that the
-            # optimizer will choose not to evaluate the Jacobian in some
-            # iterations. If False, evaluate the Jacobian now, which will
-            # also fill in the residual array, and avoid the call to
-            # model_loglike.evaluate
-            if config_fit.eval_residual:
-                model_loglike.evaluate()
-                result.n_eval_resid += 1
+            if fitinputs is None:
+                fitinputs = FitInputs.from_model(model)
             else:
-                model_jac.evaluate()
-                result.n_eval_jac += 1
-            result.time_eval += time.process_time() - time_init
-            return -result.inputs.residual
-
-        def jacobian_func(
-            params_new: np.ndarray,
-            model_jac: Model,
-            model_loglike: Model,
-            params: tuple[tuple[int, g2f.ParameterD]],
-            result: FitResult,
-            jac: np.ndarray,
-        ) -> np.ndarray:
-            # If False, the Jacobian should already have been computed by a
-            # call to residual_func.
-            if result.config.eval_residual:
-                time_init = time.process_time()
-                model_jac.evaluate()
-                result.time_eval += time.process_time() - time_init
-                result.n_eval_jac += 1
-            return jac
-
-        if config.eval_residual:
-            model_loglike = g2f.ModelD(
-                data=model.data,
-                psfmodels=model.psfmodels,
-                sources=model.sources,
-                priors=model.priors,
-            )
-            model_loglike.setup_evaluators(
-                evaluatormode=g2f.EvaluatorMode.loglike,
+                errors = fitinputs.validate_for_model(model)
+                if errors:
+                    newline = "\n"
+                    raise ValueError(f"fitinputs validation got errors:\n{newline.join(errors)}")
+            model.setup_evaluators(
+                evaluatormode=g2f.EvaluatorMode.jacobian,
+                outputs=fitinputs.jacobians,
                 residuals=fitinputs.residuals,
+                outputs_prior=fitinputs.outputs_prior,
                 residuals_prior=fitinputs.residuals_prior,
+                print=printout,
+                force=True,
             )
-        else:
-            model_loglike = None
 
         params_psf_free = []
         for psfmodel in model.psfmodels:
@@ -695,16 +941,6 @@ class Modeller:
                 f"Model has free PSF model params: {list(params_psf_free.keys())}."
                 f" All PSF model parameters must be fixed before fitting."
             )
-
-        model.setup_evaluators(
-            evaluatormode=g2f.EvaluatorMode.jacobian,
-            outputs=fitinputs.jacobians,
-            residuals=fitinputs.residuals,
-            outputs_prior=fitinputs.outputs_prior,
-            residuals_prior=fitinputs.residuals_prior,
-            print=printout,
-            force=True,
-        )
 
         offsets_params = dict(model.offsets_parameters())
         params_offsets = {v: k for (k, v) in offsets_params.items()}
@@ -726,87 +962,138 @@ class Modeller:
                 param.fixed = True
                 params_free_sorted_missing.append(param)
 
-        if params_free_sorted_missing:
-            if config.eval_residual:
-                model_loglike.setup_evaluators(
-                    evaluatormode=g2f.EvaluatorMode.loglike,
-                    residuals=fitinputs.residuals,
-                    residuals_prior=fitinputs.residuals_prior,
-                    force=True,
-                )
-            fitinputs = FitInputs.from_model(model)
-            model.setup_evaluators(
-                evaluatormode=g2f.EvaluatorMode.jacobian,
-                outputs=fitinputs.jacobians,
-                residuals=fitinputs.residuals,
-                outputs_prior=fitinputs.outputs_prior,
-                residuals_prior=fitinputs.residuals_prior,
-                print=printout,
-                force=True,
-            )
-            params_free_sorted = tuple(params_free_sorted)
-        else:
-            params_free_sorted = params_free_sorted_all
-
-        jac = fitinputs.jacobian[:, 1:]
-        # Assert that this is a view, otherwise this won't work
-        assert id(jac.base) == id(fitinputs.jacobian)
-        n_params_free = len(params_free)
-        bounds = ([None] * n_params_free, [None] * n_params_free)
-        params_init = [None] * n_params_free
-
-        for idx, param in enumerate(params_free):
-            limits = param.limits
-            # If the transform has more restrictive limits, use those
-            if hasattr(param.transform, "limits"):
-                limits_transform = param.transform.limits
-                n_within = limits.check(limits_transform.min) + limits.check(limits_transform.min)
-                if n_within == 2:
-                    limits = limits_transform
-                elif n_within != 0:
-                    raise ValueError(
-                        f"{param=} {param.limits=} and {param.transform.limits=}"
-                        f" intersect; one must be a subset of the other"
+        try:
+            if not use_pygmo:
+                if params_free_sorted_missing:
+                    fitinputs = FitInputs.from_model(model)
+                    params_free_sorted = tuple(params_free_sorted)
+                    model.setup_evaluators(
+                        evaluatormode=g2f.EvaluatorMode.jacobian,
+                        outputs=fitinputs.jacobians,
+                        residuals=fitinputs.residuals,
+                        outputs_prior=fitinputs.outputs_prior,
+                        residuals_prior=fitinputs.residuals_prior,
+                        print=printout,
+                        force=True,
                     )
-            bounds[0][idx] = param.transform.forward(limits.min)
-            bounds[1][idx] = param.transform.forward(limits.max)
-            if not limits.check(param.value):
-                raise RuntimeError(f"{param=}.value_transformed={param.value} not within {limits=}")
-            params_init[idx] = param.value_transformed
-
-        results = FitResult(inputs=fitinputs, config=config)
-        time_init = time.process_time()
-        # The initial evaluate is needed to fill in jac for the next line
-        _ll_init = model.evaluate()  # noqa: F841
-        x_scale_jac_clipped = np.clip(1.0 / (np.sum(jac**2, axis=0) ** 0.5), 1e-5, 1e19)
-        result_opt = spopt.least_squares(
-            residual_func,
-            params_init,
-            jac=jacobian_func,
-            bounds=bounds,
-            args=(model, model_loglike, params_free, results, jac),
-            x_scale=x_scale_jac_clipped,
-            **kwargs,
-        )
-        results.time_run = time.process_time() - time_init
-        results.result = result_opt
-        if params_free_sorted_missing:
-            params_best = []
-            for param in params_free_sorted_all:
-                if param in params_free_sorted_missing:
-                    params_best.append(param.value)
-                    param.fixed = False
                 else:
-                    params_best.append(result_opt.x[offsets_params[param] - 1])
-            results.params_best = tuple(params_best)
-            results.params = params_free_sorted_all
-        else:
-            results.params_best = tuple(
-                result_opt.x[offsets_params[param] - 1] for param in params_free_sorted
-            )
-            results.params = params_free_sorted
-        results.n_eval_func = result_opt.nfev
-        results.n_eval_jac = result_opt.njev if result_opt.njev else 0
+                    params_free_sorted = params_free_sorted_all
+                if config.eval_residual:
+                    model_loglike.setup_evaluators(
+                        evaluatormode=g2f.EvaluatorMode.loglike,
+                        residuals=fitinputs.residuals,
+                        residuals_prior=fitinputs.residuals_prior,
+                    )
+
+                jac = fitinputs.jacobian[:, 1:]
+                # Assert that this is a view, otherwise this won't work
+                assert id(jac.base) == id(fitinputs.jacobian)
+
+            n_params_free = len(params_free)
+            bounds = ([None] * n_params_free, [None] * n_params_free)
+            params_init = [None] * n_params_free
+
+            for idx, param in enumerate(params_free):
+                limits = param.limits
+                # If the transform has more restrictive limits, use those
+                if hasattr(param.transform, "limits"):
+                    limits_transform = param.transform.limits
+                    n_within = limits.check(limits_transform.min) + limits.check(limits_transform.min)
+                    if n_within == 2:
+                        limits = limits_transform
+                    elif n_within != 0:
+                        raise ValueError(
+                            f"{param=} {param.limits=} and {param.transform.limits=}"
+                            f" intersect; one must be a subset of the other"
+                        )
+                bounds[0][idx] = param.transform.forward(limits.min)
+                bounds[1][idx] = param.transform.forward(limits.max)
+                if not limits.check(param.value):
+                    raise RuntimeError(f"{param=}.value_transformed={param.value} not within {limits=}")
+                params_init[idx] = param.value_transformed
+
+            results = FitResult(inputs=fitinputs, config=config)
+            time_init = time.process_time()
+            if use_pygmo:
+                uda = pg.nlopt("lbfgs")
+                uda.ftol_abs = 1e-4
+                algo = pg.algorithm(uda)
+
+                # pygmo seems to make proposals right at the limits
+                # parameter limits are currently set as untransformed values
+                # and sometimes the proposal exceeds those when transformed
+                bounds_lower = tuple(np.nextafter(x, np.inf) for x in bounds[0])
+                bounds_upper = tuple(np.nextafter(x, -np.inf) for x in bounds[1])
+
+                udp = PygmoUDP(
+                    params=params_free,
+                    model_loglike=model_loglike,
+                    model_loglike_grad=model,
+                    bounds_lower=bounds_lower,
+                    bounds_upper=bounds_upper,
+                    result=results,
+                )
+
+                # if the initial value was at one of the bounds, reset it to
+                # one percent of the range away from the bound
+                for idx, value_init in enumerate(params_init):
+                    bound_lower = bounds_lower[idx]
+                    bound_upper = bounds_upper[idx]
+                    if value_init >= bound_upper:
+                        params_init[idx] = bound_lower + 0.99*(bound_upper - bound_lower)
+                    elif value_init <= bound_lower:
+                        params_init[idx] = bound_lower + 0.01*(bound_upper - bound_lower)
+
+                problem = pg.problem(udp)
+                pop = pg.population(prob=problem, size=0)
+                pop.push_back(np.array(params_init))
+                result_opt = algo.evolve(pop)
+                x_best = result_opt.champion_x
+                results.n_eval_func = pop.problem.get_fevals()
+                results.n_eval_jac = pop.problem.get_gevals()
+                results.chisq_best = 2*result_opt.champion_f
+            else:
+                # The initial evaluate will fill in jac for the next line
+                # _ll_init is assigned just for convenient debugging
+                _ll_init = model.evaluate()  # noqa: F841
+                x_scale_jac_clipped = np.clip(1.0 / (np.sum(jac**2, axis=0) ** 0.5), 1e-5, 1e19)
+                result_opt = spopt.least_squares(
+                    residual_scipy,
+                    params_init,
+                    jac=jacobian_scipy,
+                    bounds=bounds,
+                    args=(model, model_loglike, params_free, results, jac),
+                    x_scale=x_scale_jac_clipped,
+                    **kwargs,
+                )
+                x_best = result_opt.x
+                results.n_eval_func = result_opt.nfev
+                results.n_eval_jac = result_opt.njev if result_opt.njev else 0
+                results.chisq_best = 2*result_opt.cost
+
+            results.time_run = time.process_time() - time_init
+            results.result = result_opt
+            if params_free_sorted_missing:
+                params_best = []
+                for param in params_free_sorted_all:
+                    if param in params_free_sorted_missing:
+                        params_best.append(param.value)
+                        param.fixed = False
+                    else:
+                        params_best.append(x_best[offsets_params[param] - 1])
+                results.params_best = tuple(params_best)
+                results.params = params_free_sorted_all
+            else:
+                results.params_best = tuple(
+                    x_best[offsets_params[param] - 1] for param in params_free_sorted
+                )
+                results.params = params_free_sorted
+            results.params_free_missing = tuple(params_free_sorted_missing)
+        except Exception as e:
+            # Any missing params we fixed must be set free again
+            for param in params_free_sorted_missing:
+                param.fixed = False
+            raise e
 
         return results
 

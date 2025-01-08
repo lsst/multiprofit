@@ -681,8 +681,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                     model,
                     source_multi,
                     catexps,
-                    values_init,
-                    centroid_pixel_offset=config_data.config.centroid_pixel_offset,
+                    config_data=config_data,
+                    values_init=values_init,
                 )
 
                 # Caches the jacobian residual if the data size is unchanged
@@ -692,7 +692,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                 if size_new != size:
                     fitInputs = None
                     size = size_new
-                else:
+                # Some algorithms might not even use fitInputs
+                elif fitInputs is not None:
                     fitInputs = fitInputs if not fitInputs.validate_for_model(model) else None
 
                 # TODO: Check if flux param limits and transforms are set
@@ -713,11 +714,16 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                 if config.config_fit.eval_residual:
                     results[f"{prefix}n_eval_jac"][idx] = result_full.n_eval_jac
 
+                params_free_missing = result_full.params_free_missing or tuple()
+
                 # Set all params to best fit values
                 # In case the optimizer doesn't
-                for (key, (param, offset)), value in zip(columns_param_free.items(), result_full.params_best):
+                for (key, (param, offset)), value in zip(
+                    columns_param_free.items(), result_full.params_best,
+                ):
                     param.value_transformed = value
-                    results[key][idx] = param.value + offset
+                    if param not in params_free_missing:
+                        results[key][idx] = param.value + offset
 
                 # Also add any offset to the fixed parameters
                 # (usually centroids, if any)
@@ -731,7 +737,16 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                         model=model, ratio_min=0.01, validate=True
                     )
                     results[f"{prefix}delta_ll_fit_linear"][idx] = np.sum(loglike_new) - np.sum(loglike_init)
-                    for column, param in columns_param_flux.items():
+
+                    if params_free_missing:
+                        columns_param_flux_fit = {
+                            column: param for column, param in columns_param_flux.items()
+                            if param not in params_free_missing
+                        }
+                    else:
+                        columns_param_flux_fit = columns_param_flux
+
+                    for column, param in columns_param_flux_fit.items():
                         results[column][idx] = param.value
 
                 if config.convert_cen_xy_to_radec:
@@ -745,6 +760,9 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                     errors = []
                     model_eval = model
                     errors_iter = None
+                    for param in params_free_missing:
+                        param.fixed = True
+
                     if config.compute_errors_from_jacobian:
                         try:
                             errors_iter = np.sqrt(
@@ -829,8 +847,19 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                                 for param in params:
                                     param.fixed = False
 
-                        for value, column_err in zip(errors, columns_err):
+                        if params_free_missing:
+                            columns_err_fitted = [
+                                column for column, param in zip(columns_err, params.values())
+                                if param not in params_free_missing
+                            ]
+                        else:
+                            columns_err_fitted = columns_err
+
+                        for value, column_err in zip(errors, columns_err_fitted):
                             results[column_err][idx] = value
+
+                        for param in params_free_missing:
+                            param.fixed = False
 
                         # Convert the x/y errors to ra/dec errors
                         if config.convert_cen_xy_to_radec:
@@ -858,7 +887,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                                 radec_err -= radec
                                 results[key_ra_err][idx], results[key_dec_err][idx] = np.abs(radec_err)
 
-                results[f"{prefix}chisq_red"][idx] = np.sum(fitInputs.residual**2) / size
+                results[f"{prefix}chisq_red"][idx] = result_full.chisq_best/size
                 results[f"{prefix}time_full"][idx] = time.process_time() - time_init
             except Exception as e:
                 size = 0 if fitInputs is None else size_new
@@ -964,6 +993,26 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         return model
 
     def get_model_radec(self, source: Mapping[str, Any], cen_x: float, cen_y: float) -> tuple[float, float]:
+        """Return right ascension and declination values for a source.
+
+        Implementing this method is necessary only when fitting data with
+        accompanying WCS.
+
+        Parameters
+        ----------
+        source
+            A mapping with fields expected to be populated in the
+            corresponding source catalog.
+        cen_x
+            The x-axis centroid in pixel coordinates.
+        cen_y
+            The y-axis centroid in pixel coordinates.
+
+        Returns
+        -------
+        ra, dec
+            The right ascension and declination.
+        """
         return np.nan, np.nan
 
     @abstractmethod
@@ -972,8 +1021,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         model: g2f.ModelD,
         source: Mapping[str, Any],
         catexps: list[CatalogExposureSourcesABC],
+        config_data: CatalogSourceFitterConfigData,
         values_init: Mapping[g2f.ParameterD, float] | None = None,
-        centroid_pixel_offset: float = 0,
         **kwargs: Any,
     ) -> None:
         """Initialize a Model for a single source row.
@@ -987,11 +1036,10 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             corresponding source catalog for initialization.
         catexps
             A list of (source and psf) catalog-exposure pairs.
+        config_data
+            Configuration settings and data for fitting and output.
         values_init
             Initial parameter values from the model configuration.
-        centroid_pixel_offset
-            The value of the offset required to convert pixel centroids from
-            MultiProFit coordinates to catalog coordinates.
         **kwargs
             Additional keyword arguments that cannot be required for fitting.
         """
