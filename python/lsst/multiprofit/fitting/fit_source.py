@@ -148,7 +148,13 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
         psf_models = []
 
         for catexp in catexps:
-            source = catexp.get_catalog()[idx_row]
+            catalog = catexp.get_catalog()
+            # This indicates that there's no corresponding exposure
+            # (the catexp interface expects a tabular type for catalog but
+            #  no interface for an exposure has been defined, yet)
+            if len(catalog) == 0:
+                continue
+            source = catalog[idx_row]
             observation = catexp.get_source_observation(source)
             # If the observation or PSF model is bad enough that it cannot be
             # fit, do not add it to the data.
