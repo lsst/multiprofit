@@ -110,6 +110,14 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
     )
     config_model = pexConfig.ConfigField[ModelConfig](doc="Source model configuration")
     convert_cen_xy_to_radec = pexConfig.Field[bool](default=True, doc="Convert cen x/y params to RA/dec")
+    naming_scheme = pexConfig.ChoiceField[str](
+        doc="Naming scheme for column names",
+        allowed={
+            "default": "snake_case with {component_name}[_{band}]_{parameter}[_err]",
+            "lsst": "snake_case with [{band}_]{component_name}_{parameter}[Err]",
+        },
+        default="default",
+    )
     prior_cen_x_stddev = pexConfig.Field[float](
         default=0, doc="Prior std. dev. on x centroid (ignored if not >0)"
     )
@@ -117,6 +125,11 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
         default=0, doc="Prior std. dev. on y centroid (ignored if not >0)"
     )
     unit_flux = pexConfig.Field[str](default=None, doc="Flux unit", optional=True)
+
+    def get_error_suffix(self) -> str:
+        if self.naming_scheme == "lsst":
+            return "Err"
+        return "_err"
 
     def make_model_data(
         self,
@@ -276,10 +289,11 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
                 if suffix is not None:
                     schema.append(ColumnInfo(key=f"{key[:-5]}{suffix}", dtype="f8", unit=u.deg))
         if self.compute_errors != "NONE":
+            suffix = self.get_error_suffix()
             idx_end = len(schema)
             # Do not remove idx_end unless you like infinite recursion
             for column in schema[idx_start:idx_end]:
-                schema.append(ColumnInfo(key=f"{column.key}_err", dtype=column.dtype, unit=column.unit))
+                schema.append(ColumnInfo(key=f"{column.key}{suffix}", dtype=column.dtype, unit=column.unit))
 
         schema.extend(self.schema_configurable())
         return schema
@@ -318,6 +332,7 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
         has_prefix_source = config_model.has_prefix_source()
         n_channels = len(self.channels)
         parameters = {}
+        format_lsst = self.config.naming_scheme == "lsst"
 
         for name_source, config_source in config_model.sources.items():
             prefix_source = f"{name_source}_" if has_prefix_source else ""
@@ -328,10 +343,14 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
                 multicen = len(config_group.centroids) > 1
                 configs_comp = config_group.get_component_configs().items()
 
+                format_flux = "{channel}_{prefix}flux" if format_lsst else "{prefix}{channel}_flux"
+                is_multicomp = len(configs_comp) > 1
+
                 for idx_comp_group, (name_comp, config_comp) in enumerate(configs_comp):
                     component = self.components[idx_comp_first + idx_comp_group]
                     label_size = config_comp.get_size_label()
-                    prefix_comp = f"{prefix_group}{name_comp}{'_' if name_comp else ''}"
+                    key_comp = name_comp if ((not format_lsst) or is_multicomp) else ""
+                    prefix_comp = f"{prefix_group}{key_comp}{'_' if key_comp else ''}"
                     if multicen or (idx_comp_group == 0):
                         prefix_cen = prefix_comp if multicen else prefix_group
                         parameters[f"{prefix_cen}cen_x"] = component.centroid.x_param
@@ -349,7 +368,8 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
                         if len(params_flux) != n_channels:
                             raise ValueError(f"{params_flux=} len={len(params_flux)} != {n_channels=}")
                         for channel, param_flux in zip(self.channels, params_flux):
-                            parameters[f"{prefix_comp}{channel.name}_flux"] = param_flux
+                            key_flux = format_flux.format(prefix=prefix_comp, channel=channel.name)
+                            parameters[key_flux] = param_flux
                     if hasattr(config_comp, "sersic_index") and not config_comp.sersic_index.fixed:
                         parameters[f"{prefix_comp}sersicindex"] = component.sersicindex_param
 
