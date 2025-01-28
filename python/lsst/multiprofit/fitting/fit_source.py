@@ -110,14 +110,6 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
     )
     config_model = pexConfig.ConfigField[ModelConfig](doc="Source model configuration")
     convert_cen_xy_to_radec = pexConfig.Field[bool](default=True, doc="Convert cen x/y params to RA/dec")
-    naming_scheme = pexConfig.ChoiceField[str](
-        doc="Naming scheme for column names",
-        allowed={
-            "default": "snake_case with {component_name}[_{band}]_{parameter}[_err]",
-            "lsst": "snake_case with [{band}_]{component_name}_{parameter}[Err]",
-        },
-        default="default",
-    )
     prior_cen_x_stddev = pexConfig.Field[float](
         default=0, doc="Prior std. dev. on x centroid (ignored if not >0)"
     )
@@ -125,11 +117,6 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
         default=0, doc="Prior std. dev. on y centroid (ignored if not >0)"
     )
     unit_flux = pexConfig.Field[str](default=None, doc="Flux unit", optional=True)
-
-    def get_error_suffix(self) -> str:
-        if self.naming_scheme == "lsst":
-            return "Err"
-        return "_err"
 
     def make_model_data(
         self,
@@ -289,7 +276,7 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
                 if suffix is not None:
                     schema.append(ColumnInfo(key=f"{key[:-5]}{suffix}", dtype="f8", unit=u.deg))
         if self.compute_errors != "NONE":
-            suffix = self.get_error_suffix()
+            suffix = self.suffix_error
             idx_end = len(schema)
             # Do not remove idx_end unless you like infinite recursion
             for column in schema[idx_start:idx_end]:
@@ -333,6 +320,10 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
         n_channels = len(self.channels)
         parameters = {}
         format_lsst = self.config.naming_scheme == "lsst"
+        label_cen = self.config.get_key_cen()
+        label_rho = self.config.get_key_rho()
+        label_sersic = self.config.get_key_sersicindex()
+        label_x, label_y = self.config.get_key_cen()
 
         for name_source, config_source in config_model.sources.items():
             prefix_source = f"{name_source}_" if has_prefix_source else ""
@@ -343,24 +334,27 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
                 multicen = len(config_group.centroids) > 1
                 configs_comp = config_group.get_component_configs().items()
 
-                format_flux = "{channel}_{prefix}flux" if format_lsst else "{prefix}{channel}_flux"
                 is_multicomp = len(configs_comp) > 1
 
                 for idx_comp_group, (name_comp, config_comp) in enumerate(configs_comp):
                     component = self.components[idx_comp_first + idx_comp_group]
                     label_size = config_comp.get_size_label()
-                    key_comp = name_comp if ((not format_lsst) or is_multicomp) else ""
-                    prefix_comp = f"{prefix_group}{key_comp}{'_' if key_comp else ''}"
+                    if format_lsst:
+                        label_size = label_size.capitalize()
+                    else:
+                        label_size = f"{label_size}_"
+                    key_comp = name_comp if is_multicomp else ""
+                    prefix_comp = f"{prefix_group}{key_comp}{'_' if (key_comp and not format_lsst) else ''}"
                     if multicen or (idx_comp_group == 0):
                         prefix_cen = prefix_comp if multicen else prefix_group
-                        parameters[f"{prefix_cen}cen_x"] = component.centroid.x_param
-                        parameters[f"{prefix_cen}cen_y"] = component.centroid.y_param
+                        parameters[f"{prefix_cen}{label_cen}{label_x}"] = component.centroid.x_param
+                        parameters[f"{prefix_cen}{label_cen}{label_y}"] = component.centroid.y_param
                     if not config_comp.size_x.fixed:
-                        parameters[f"{prefix_comp}{label_size}_x"] = component.ellipse.size_x_param
+                        parameters[f"{prefix_comp}{label_size}{label_x}"] = component.ellipse.size_x_param
                     if not config_comp.size_y.fixed:
-                        parameters[f"{prefix_comp}{label_size}_y"] = component.ellipse.size_y_param
+                        parameters[f"{prefix_comp}{label_size}{label_y}"] = component.ellipse.size_y_param
                     if not config_comp.rho.fixed:
-                        parameters[f"{prefix_comp}rho"] = component.ellipse.rho_param
+                        parameters[f"{prefix_comp}{label_rho}"] = component.ellipse.rho_param
                     if not config_comp.flux.fixed:
                         # TODO: return this to component.integralmodel
                         # when binding for g2f.FractionalIntegralModel is fixed
@@ -371,7 +365,7 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
                             key_flux = format_flux.format(prefix=prefix_comp, channel=channel.name)
                             parameters[key_flux] = param_flux
                     if hasattr(config_comp, "sersic_index") and not config_comp.sersic_index.fixed:
-                        parameters[f"{prefix_comp}sersicindex"] = component.sersicindex_param
+                        parameters[f"{prefix_comp}{label_sersic}"] = component.sersicindex_param
 
         return parameters
 
@@ -405,6 +399,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         self,
         params_radec: dict[str, tuple[g2f.CentroidXParameterD, g2f.CentroidYParameterD]],
         compute_errors: bool,
+        config: CatalogSourceFitterConfig,
     ) -> tuple[list[tuple[str, str, str, str]], list[tuple[str, str, str, str, str, str]]]:
         """Get a list of the columns needed for conversion of x/y centroid
         parameters into ra/dec.
@@ -425,6 +420,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         """
         columns_params_radec = []
         columns_params_radec_err = []
+        suffix_err = config.suffix_error
 
         for key_base, (param_cen_x, param_cen_y) in params_radec.items():
             if param_cen_y is None:
@@ -437,12 +433,12 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             if compute_errors:
                 columns_params_radec_err.append(
                     (
-                        f"{key_base}cen_ra_err",
-                        f"{key_base}cen_dec_err",
+                        f"{key_base}cen_ra{suffix_err}",
+                        f"{key_base}cen_dec{suffix_err}",
                         f"{key_base}cen_x",
                         f"{key_base}cen_y",
-                        f"{key_base}cen_x_err",
-                        f"{key_base}cen_y_err",
+                        f"{key_base}cen_x{suffix_err}",
+                        f"{key_base}cen_y{suffix_err}",
                     )
                 )
         return columns_params_radec, columns_params_radec_err
@@ -590,6 +586,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         columns_cenx_err_copy = []
         columns_ceny_err_copy = []
 
+        suffix_err = config.suffix_error
+
         # Add each param to appropriate and more specific pre-computed lists
         for key, param in params.items():
             key_full = f"{prefix}{key}"
@@ -599,11 +597,11 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             # Add the corresponding error key to the appropriate list
             if compute_errors:
                 if param.free:
-                    columns_err.append(f"{key_full}_err")
+                    columns_err.append(f"{key_full}{suffix_err}")
                 elif is_cenx:
-                    columns_cenx_err_copy.append(f"{key_full}_err")
+                    columns_cenx_err_copy.append(f"{key_full}{suffix_err}")
                 elif is_ceny:
-                    columns_ceny_err_copy.append(f"{key_full}_err")
+                    columns_ceny_err_copy.append(f"{key_full}{suffix_err}")
 
             # Add this param to the appropriate dict
             (columns_param_fixed if param.fixed else columns_param_free)[key_full] = (
@@ -621,7 +619,9 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         if config.convert_cen_xy_to_radec:
             assert params_cen_x.keys() == params_cen_y.keys()
             columns_params_radec, columns_params_radec_err = self._get_columns_params_radec(
-                {k: (x, params_cen_y[k]) for k, x in params_cen_x.items()}, compute_errors
+                {k: (x, params_cen_y[k]) for k, x in params_cen_x.items()},
+                compute_errors,
+                config=config,
             )
 
         # Setup the results table with correct column names
