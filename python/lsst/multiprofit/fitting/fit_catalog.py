@@ -85,7 +85,64 @@ class CatalogFitterConfig(pexConfig.Config):
         itemtype=str,
         doc="Flag column names to set, keyed by name of exception to catch",
     )
+    naming_scheme = pexConfig.ChoiceField[str](
+        doc="Naming scheme for column names",
+        allowed={
+            "default": "snake_case with {component_name}[_{band}]_{parameter}[_err]",
+            "lsst": "snake_case with [{band}_]{component_name}_{parameter}[Err]",
+        },
+        default="default",
+    )
     prefix_column = pexConfig.Field[str](default="mpf_", doc="Column name prefix")
+    suffix_error = pexConfig.Field[str](
+        default="_err",
+        doc="Default suffix for error columns. Can be overridden by naming_scheme.",
+    )
+
+    _format_flux = {"default": "{prefix}{channel}_flux", "lsst":"{channel}_{prefix}Flux"}
+    _key_cen = {"default": "_cen", "lsst": "Cen"}
+    _key_rho = {"default": "_rho", "lsst": "Rho"}
+    _key_sersicindex = {"default": "_sersic_index", "lsst": "SersicIndex"}
+    _suffix_x = {"default": "_x", "lsst": "X"}
+    _suffix_y = {"default": "_y", "lsst": "Y"}
+
+    def _get_label(self, format_name: str, values: dict[str, str]) -> str:
+        """Get the label for part of a column name for a given format.
+
+        Parameters
+        ----------
+        format_name
+            The name of the format to get the label for.
+        values
+            The values of the name by format.
+
+        Returns
+        -------
+        label
+            The formatted label, if specified for that format, else the
+            value for the default format.
+        """
+        return values.get(format_name, values["default"])
+
+    def get_key_cen(self) -> str:
+        """Get the key for centroid columns."""
+        return self._get_label(self.naming_scheme, self._key_cen)
+
+    def get_key_rho(self) -> str:
+        """Get the key for ellipse rho columns."""
+        return self._get_label(self.naming_scheme, self._key_rho)
+
+    def get_key_sersicindex(self) -> str:
+        """Get the key for Sersic index columns."""
+        return self._get_label(self.naming_scheme, self._key_sersicindex)
+
+    def get_suffix_x(self) -> str:
+        """Get the suffix for x-axis columns."""
+        return self._get_label(self.naming_scheme, self._suffix_x)
+
+    def get_suffix_y(self) -> str:
+        """Get the suffix for y-axis columns."""
+        return self._get_label(self.naming_scheme, self._suffix_y)
 
     def schema(
         self,
