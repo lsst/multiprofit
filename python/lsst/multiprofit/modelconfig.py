@@ -34,7 +34,7 @@ from .sourceconfig import SourceConfig
 class ModelConfig(pexConfig.Config):
     """Configuration for an lsst.gauss2d.fit Model."""
 
-    sources = pexConfig.ConfigDictField[str, SourceConfig](doc="The configuration for sources")
+    sources = pexConfig.ConfigDictField[str, SourceConfig](doc="The configuration for sources", default={})
 
     @staticmethod
     def format_label(label: str, name_source: str) -> str:
