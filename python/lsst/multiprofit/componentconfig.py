@@ -365,6 +365,8 @@ class EllipticalComponentConfig(ShapePriorConfig):
 class GaussianComponentConfig(EllipticalComponentConfig):
     """Configuration for an lsst.gauss2d.fit Gaussian component."""
 
+    _size_label = "sigma"
+
     transform_frac_name = pexConfig.Field[str](
         doc="The name of the reference transform for flux fraction parameters",
         default="log10",
@@ -372,7 +374,7 @@ class GaussianComponentConfig(EllipticalComponentConfig):
     )
 
     def get_size_label(self) -> str:
-        return "sigma"
+        return self._size_label
 
     def get_type_name(self) -> str:
         return "Gaussian"
@@ -469,6 +471,7 @@ class SersicComponentConfig(EllipticalComponentConfig):
         4: _interpolator_class_default(4),
         8: _interpolator_class_default(8),
     }
+    _size_label = "reff"
 
     order = pexConfig.ChoiceField[int](doc="Sersic mix order", allowed={4: "Four", 8: "Eight"}, default=4)
     sersic_index = pexConfig.ConfigField[SersicIndexParameterConfig](doc="Sersic index config")
@@ -496,7 +499,7 @@ class SersicComponentConfig(EllipticalComponentConfig):
         )
 
     def get_size_label(self) -> str:
-        return "reff"
+        return self._size_label
 
     def get_type_name(self) -> str:
         is_gaussian_fixed = self.is_gaussian_fixed()
