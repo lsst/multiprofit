@@ -28,6 +28,9 @@ import astropy.table
 import matplotlib.pyplot as plt
 import numpy as np
 
+from ..fitting.fit_source import CatalogSourceFitterConfig, ModelConfig
+from ..utils import set_config_from_dict
+
 ln10 = np.log(10)
 
 
@@ -67,18 +70,29 @@ def plot_catalog_bootstrap(
     if n_bins is None:
         n_bins = np.max([int(np.ceil(np.sqrt(n_sources))), 10])
 
-    config = catalog_bootstrap.meta["config"]
-    prefix = config["prefix_column"]
-    suffix_err = "_err"
+    config = CatalogSourceFitterConfig()
+    config_dict = catalog_bootstrap.meta["config"]
+    # TODO: Figure out if this can be implemented correctly in DM-48911
+    # In the meantime, we don't need to know the ModelConfig to format columns
+    # However, it would be useful to get the band and component name (if any)
+    # given a formatted flux (error) column key
+    config_dict["config_model"] = ModelConfig().toDict()
+    set_config_from_dict(config, config_dict)
+    prefix = config.prefix_column
+    suffix_err = config.suffix_error
+    len_suffix_err = len(suffix_err)
+    # This won't work if the flux format isn't a suffix
+    # TODO: Consider if this can be fixed in DM-48911
+    suffix_flux = config.get_key_flux("", "")
 
     # TODO: There are probably better ways of doing this
     colnames_err = [col for col in catalog_bootstrap.colnames if col.endswith(suffix_err)]
-    colnames_meas = [col[:-4] for col in colnames_err]
+    colnames_meas = [col[:-len_suffix_err] for col in colnames_err]
     n_params_init = len(colnames_meas)
     if paramvals_ref is not None and (len(paramvals_ref) != n_params_init):
         raise ValueError(f"{len(paramvals_ref)=} != {n_params_init=}")
 
-    results_good = catalog_bootstrap[catalog_bootstrap["mpf_n_iter"] > 0]
+    results_good = catalog_bootstrap[catalog_bootstrap[f"{prefix}n_iter"] > 0]
 
     if plot_total_fluxes or plot_colors:
         if paramvals_ref:
@@ -90,41 +104,55 @@ def plot_catalog_bootstrap(
             results_dict[colname_meas] = results_good[colname_meas]
             results_dict[colname_err] = results_good[colname_err]
 
-        colnames_flux = [colname for colname in colnames_meas if colname.endswith("_flux")]
+        colnames_flux = [colname for colname in colnames_meas if colname.endswith(suffix_flux)]
 
         colnames_flux_band = defaultdict(list)
         colnames_flux_comp = defaultdict(list)
 
         for colname in colnames_flux:
             colname_short = colname.partition(prefix)[-1]
-            comp, band = colname_short[:-5].split("_")
+            comp_band = colname_short.split(suffix_flux)[0]
+            comp, band = comp_band.split("_") if ("_" in comp_band) else ("", comp_band)
             colnames_flux_band[band].append(colname)
             colnames_flux_comp[comp].append(colname)
 
+        n_comps = len(colnames_flux_comp)
+
         band_prev = None
         for band, colnames_band in colnames_flux_band.items():
-            for suffix, target in (("", colnames_meas), ("_err", colnames_err)):
-                is_err = suffix == "_err"
-                colname_flux = f"{prefix}{band}_flux{suffix}"
-                total = np.sum(
-                    [results_good[f"{colname}{suffix}"] ** (1 + is_err) for colname in colnames_band], axis=0
-                )
-                if is_err:
-                    total = np.sqrt(total)
-                elif paramvals_ref:
-                    paramvals_ref[colname_flux] = sum((paramvals_ref[colname] for colname in colnames_band))
-                results_dict[colname_flux] = total
-                if plot_total_fluxes:
-                    target.append(colname_flux)
+            # There's no need to make a total flux column with one component
+            # ... unless there's a component with fixed flux, but that isn't
+            # supported anyway.
+            if n_comps >= 2:
+                for suffix, target in (("", colnames_meas), (suffix_err, colnames_err)):
+                    is_err = suffix == suffix_err
+                    colname_flux = f"{config.get_key_flux(band=band, label=prefix)}{suffix}"
+                    total = np.sum(
+                        [results_good[f"{colname}{suffix}"] ** (1 + is_err) for colname in colnames_band],
+                        axis=0,
+                    )
+                    if is_err:
+                        total = np.sqrt(total)
+                    elif paramvals_ref and plot_total_fluxes:
+                        if colname_flux in paramvals_ref:
+                            raise RuntimeError(
+                                f"Tried to set a new total flux column {colname_flux} but it already exists"
+                            )
+                        paramvals_ref[colname_flux] = sum(
+                            (paramvals_ref[colname] for colname in colnames_band)
+                        )
+                    results_dict[colname_flux] = total
+                    if plot_total_fluxes:
+                        target.append(colname_flux)
 
             if band_prev:
-                flux_prev, flux = (results_dict[f"{prefix}{b}_flux"] for b in (band_prev, band))
+                flux_prev, flux = (results_dict[f"{prefix}{b}{suffix_flux}"] for b in (band_prev, band))
                 mag_prev, mag = (-2.5 * np.log10(flux_b) for flux_b in (flux_prev, flux))
                 mag_err_prev, mag_err = (
-                    results_dict[f"{prefix}{b}_flux{suffix_err}"] / (-0.4 * flux_b * ln10)
+                    results_dict[f"{prefix}{b}{suffix_flux}{suffix_err}"] / (-0.4 * flux_b * ln10)
                     for b, flux_b in ((band_prev, flux_prev), (band, flux))
                 )
-                colname_color = f"{prefix}{band_prev}-{band}_flux"
+                colname_color = f"{prefix}{band_prev}-{band}{suffix_flux}"
                 colnames_meas.append(colname_color)
                 colnames_err.append(f"{colname_color}{suffix_err}")
 
@@ -132,7 +160,7 @@ def plot_catalog_bootstrap(
                 results_dict[f"{colname_color}{suffix_err}"] = 2.5 / ln10 * np.hypot(mag_err, mag_err_prev)
                 if paramvals_ref:
                     mag_prev_ref, mag_ref = (
-                        -2.5 * np.log10(paramvals_ref[f"{prefix}{b}_flux"]) for b in (band_prev, band)
+                        -2.5 * np.log10(paramvals_ref[f"{prefix}{b}{suffix_flux}"]) for b in (band_prev, band)
                     )
                     paramvals_ref[colname_color] = mag_prev_ref - mag_ref
 

@@ -91,6 +91,7 @@ def set_config_from_dict(
                 del config[key]
     for key, value in overrides.items():
         if isinstance(value, dict):
+            # Note that this only works on a ConfigDict if a value is set
             attr = config[key] if is_config_dict else getattr(config, key)
             set_config_from_dict(attr, value)
         else:
