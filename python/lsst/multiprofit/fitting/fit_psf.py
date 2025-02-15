@@ -636,7 +636,7 @@ class CatalogPsfFitter:
                 results[f"{prefix}n_iter"][idx] = result_full.n_eval_func
                 results[f"{prefix}time_eval"][idx] = result_full.time_eval
                 results[f"{prefix}time_fit"][idx] = result_full.time_run
-                results[f"{prefix}chisq_red"][idx] = result_full.chisq_best/size
+                results[f"{prefix}chisq_reduced"][idx] = result_full.chisq_best / size
                 if config.config_fit.eval_residual:
                     results[f"{prefix}n_eval_jac"][idx] = result_full.n_eval_jac
 
@@ -650,9 +650,7 @@ class CatalogPsfFitter:
                 column = self.errors_expected.get(e.__class__, "")
                 if column:
                     row[f"{prefix}{column}"] = True
-                    logger.debug(
-                        f"{id_source=} ({idx}/{n_rows}) PSF fit failed with known exception={e}"
-                    )
+                    logger.debug(f"{id_source=} ({idx}/{n_rows}) PSF fit failed with known exception={e}")
                 else:
                     row[f"{prefix}unknown_flag"] = True
                     logger.info(

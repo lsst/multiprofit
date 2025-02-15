@@ -248,7 +248,7 @@ class CatalogFitterConfig(pexConfig.Config):
             ColumnInfo(key="time_eval", dtype="f8", unit=u.s),
             ColumnInfo(key="time_fit", dtype="f8", unit=u.s),
             ColumnInfo(key="time_full", dtype="f8", unit=u.s),
-            ColumnInfo(key="chisq_red", dtype="f8"),
+            ColumnInfo(key="chisq_reduced", dtype="f8"),
             ColumnInfo(key="unknown_flag", dtype="bool"),
         ]
         schema.extend([ColumnInfo(key=key, dtype="bool") for key in self.flag_errors.keys()])

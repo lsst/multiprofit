@@ -978,7 +978,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                                 radec_err -= radec
                                 results[key_ra_err][idx], results[key_dec_err][idx] = np.abs(radec_err)
 
-                results[f"{prefix}chisq_red"][idx] = result_full.chisq_best / size
+                results[f"{prefix}chisq_reduced"][idx] = result_full.chisq_best / size
                 results[f"{prefix}time_full"][idx] = time.process_time() - time_init
             except Exception as e:
                 size = 0 if fitInputs is None else size_new
