@@ -267,19 +267,44 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
             ]
         )
         if self.convert_cen_xy_to_radec:
-            for key, param in parameters.items():
-                suffix = (
-                    "cen_ra"
-                    if isinstance(param, g2f.CentroidXParameterD)
-                    else ("cen_dec" if isinstance(param, g2f.CentroidYParameterD) else None)
+            label_cen = self.get_key_cen()
+            cen_underscored = label_cen.startswith("_")
+            suffix_x, suffix_y, suffix_ra, suffix_dec = (
+                f"{label_cen}{suffix}"
+                for suffix in (
+                    self.get_suffix_x(),
+                    self.get_suffix_y(),
+                    self.get_suffix_ra(),
+                    self.get_suffix_dec(),
                 )
-                if suffix is not None:
-                    schema.append(ColumnInfo(key=f"{key[:-5]}{suffix}", dtype="f8", unit=u.deg))
+            )
+            suffix_ra = f"{label_cen}{self.get_suffix_ra()}"
+            suffix_dec = f"{label_cen}{self.get_suffix_dec()}"
+            for key, param in parameters.items():
+                # TODO: Update if allowing x, y <-> dec, RA mappings
+                # ... or arbitrary rotations
+                suffix_radec, suffix_xy = (
+                    (suffix_ra, suffix_x)
+                    if isinstance(param, g2f.CentroidXParameterD)
+                    else (
+                        (suffix_dec, suffix_y) if isinstance(param, g2f.CentroidYParameterD) else (None, None)
+                    )
+                )
+                if suffix_radec is not None:
+                    # Add whatever the corresponding prefix is, and also
+                    # remove any leading underscore if there's no prefix
+                    prefix, suffix = (
+                        ("", suffix_radec[1:])
+                        if (cen_underscored and (key == suffix_xy[1:]))
+                        else (key.split(suffix_xy)[0], suffix_radec)
+                    )
+                    schema.append(ColumnInfo(key=f"{prefix}{suffix}", dtype="f8", unit=u.deg))
         if self.compute_errors != "NONE":
+            suffix = self.suffix_error
             idx_end = len(schema)
             # Do not remove idx_end unless you like infinite recursion
             for column in schema[idx_start:idx_end]:
-                schema.append(ColumnInfo(key=f"{column.key}_err", dtype=column.dtype, unit=column.unit))
+                schema.append(ColumnInfo(key=f"{column.key}{suffix}", dtype=column.dtype, unit=column.unit))
 
         schema.extend(self.schema_configurable())
         return schema
@@ -313,11 +338,17 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
 
     @cached_property
     def parameters(self) -> dict[str, g2f.ParameterD]:
-        config_model = self.config.config_model
+        config = self.config
+        config_model = config.config_model
         idx_comp_first = 0
         has_prefix_source = config_model.has_prefix_source()
         n_channels = len(self.channels)
         parameters = {}
+
+        label_cen = config.get_key_cen()
+        label_rho = config.get_key_rho()
+        label_sersic = config.get_key_sersicindex()
+        label_x, label_y = config.get_suffix_x(), config.get_suffix_y()
 
         for name_source, config_source in config_model.sources.items():
             prefix_source = f"{name_source}_" if has_prefix_source else ""
@@ -328,20 +359,32 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
                 multicen = len(config_group.centroids) > 1
                 configs_comp = config_group.get_component_configs().items()
 
+                is_multicomp = len(configs_comp) > 1
+
                 for idx_comp_group, (name_comp, config_comp) in enumerate(configs_comp):
                     component = self.components[idx_comp_first + idx_comp_group]
-                    label_size = config_comp.get_size_label()
-                    prefix_comp = f"{prefix_group}{name_comp}{'_' if name_comp else ''}"
+
+                    key_comp = name_comp if is_multicomp else ""
+                    prefix_comp = f"{prefix_group}{key_comp}"
+                    key_size = config.get_prefixed_label(
+                        config.get_key_size(config_comp.get_size_label()),
+                        prefix_comp,
+                    )
+                    key_rho = config.get_prefixed_label(label_rho, prefix_comp)
+
                     if multicen or (idx_comp_group == 0):
                         prefix_cen = prefix_comp if multicen else prefix_group
-                        parameters[f"{prefix_cen}cen_x"] = component.centroid.x_param
-                        parameters[f"{prefix_cen}cen_y"] = component.centroid.y_param
+                        # Avoid double-underscoring if there's nothing to
+                        # prefix or an existing prefix
+                        key_cen = config.get_prefixed_label(label_cen, prefix_cen)
+                        parameters[f"{key_cen}{label_x}"] = component.centroid.x_param
+                        parameters[f"{key_cen}{label_y}"] = component.centroid.y_param
                     if not config_comp.size_x.fixed:
-                        parameters[f"{prefix_comp}{label_size}_x"] = component.ellipse.size_x_param
+                        parameters[f"{key_size}{label_x}"] = component.ellipse.size_x_param
                     if not config_comp.size_y.fixed:
-                        parameters[f"{prefix_comp}{label_size}_y"] = component.ellipse.size_y_param
+                        parameters[f"{key_size}{label_y}"] = component.ellipse.size_y_param
                     if not config_comp.rho.fixed:
-                        parameters[f"{prefix_comp}rho"] = component.ellipse.rho_param
+                        parameters[key_rho] = component.ellipse.rho_param
                     if not config_comp.flux.fixed:
                         # TODO: return this to component.integralmodel
                         # when binding for g2f.FractionalIntegralModel is fixed
@@ -349,9 +392,12 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
                         if len(params_flux) != n_channels:
                             raise ValueError(f"{params_flux=} len={len(params_flux)} != {n_channels=}")
                         for channel, param_flux in zip(self.channels, params_flux):
-                            parameters[f"{prefix_comp}{channel.name}_flux"] = param_flux
+                            key_flux = config.get_key_flux(label=prefix_comp, band=channel.name)
+                            parameters[key_flux] = param_flux
                     if hasattr(config_comp, "sersic_index") and not config_comp.sersic_index.fixed:
-                        parameters[f"{prefix_comp}sersicindex"] = component.sersicindex_param
+                        parameters[config.get_prefixed_label(label_sersic, prefix_comp)] = (
+                            component.sersicindex_param
+                        )
 
         return parameters
 
@@ -385,6 +431,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         self,
         params_radec: dict[str, tuple[g2f.CentroidXParameterD, g2f.CentroidYParameterD]],
         compute_errors: bool,
+        config: CatalogSourceFitterConfig,
     ) -> tuple[list[tuple[str, str, str, str]], list[tuple[str, str, str, str, str, str]]]:
         """Get a list of the columns needed for conversion of x/y centroid
         parameters into ra/dec.
@@ -395,6 +442,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             Dict of tuple of x, y parameter objects by name.
         compute_errors
             Whether errors will be computed.
+        config
+            The configuration with column formatting parameters.
 
         Returns
         -------
@@ -405,24 +454,37 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         """
         columns_params_radec = []
         columns_params_radec_err = []
+        suffix_err = config.suffix_error
+        key_cen = config.get_key_cen()
+        suffix_x, suffix_y = config.get_suffix_x(), config.get_suffix_y()
+        suffix_ra, suffix_dec = config.get_suffix_ra(), config.get_suffix_dec()
 
         for key_base, (param_cen_x, param_cen_y) in params_radec.items():
+            # Avoid C if there's nothing to prefix
+            # or an existing prefix ending in an underscore
+            key_base_cen = config.get_prefixed_label(f"{key_base}{key_cen}", config.prefix_column)
+
             if param_cen_y is None:
                 raise RuntimeError(
                     f"Fitter failed to find corresponding cen_y param for {key_base=}; is it fixed?"
                 )
             columns_params_radec.append(
-                (f"{key_base}cen_ra", f"{key_base}cen_dec", f"{key_base}cen_x", f"{key_base}cen_y")
+                (
+                    f"{key_base_cen}{suffix_ra}",
+                    f"{key_base_cen}{suffix_dec}",
+                    f"{key_base_cen}{suffix_x}",
+                    f"{key_base_cen}{suffix_y}",
+                )
             )
             if compute_errors:
                 columns_params_radec_err.append(
                     (
-                        f"{key_base}cen_ra_err",
-                        f"{key_base}cen_dec_err",
-                        f"{key_base}cen_x",
-                        f"{key_base}cen_y",
-                        f"{key_base}cen_x_err",
-                        f"{key_base}cen_y_err",
+                        f"{key_base_cen}{suffix_ra}{suffix_err}",
+                        f"{key_base_cen}{suffix_dec}{suffix_err}",
+                        f"{key_base_cen}{suffix_x}",
+                        f"{key_base_cen}{suffix_y}",
+                        f"{key_base_cen}{suffix_x}{suffix_err}",
+                        f"{key_base_cen}{suffix_y}{suffix_err}",
                     )
                 )
         return columns_params_radec, columns_params_radec_err
@@ -570,6 +632,12 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         columns_cenx_err_copy = []
         columns_ceny_err_copy = []
 
+        suffix_err = config.suffix_error
+        key_cen = config.get_key_cen()
+        cen_underscored = key_cen.startswith("_")
+        suffix_cenx = f"{key_cen}{config.get_suffix_x()}"
+        suffix_ceny = f"{key_cen}{config.get_suffix_y()}"
+
         # Add each param to appropriate and more specific pre-computed lists
         for key, param in params.items():
             key_full = f"{prefix}{key}"
@@ -579,11 +647,11 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             # Add the corresponding error key to the appropriate list
             if compute_errors:
                 if param.free:
-                    columns_err.append(f"{key_full}_err")
+                    columns_err.append(f"{key_full}{suffix_err}")
                 elif is_cenx:
-                    columns_cenx_err_copy.append(f"{key_full}_err")
+                    columns_cenx_err_copy.append(f"{key_full}{suffix_err}")
                 elif is_ceny:
-                    columns_ceny_err_copy.append(f"{key_full}_err")
+                    columns_ceny_err_copy.append(f"{key_full}{suffix_err}")
 
             # Add this param to the appropriate dict
             (columns_param_fixed if param.fixed else columns_param_free)[key_full] = (
@@ -593,15 +661,29 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             if isinstance(param, g2f.IntegralParameterD):
                 columns_param_flux[key_full] = param
             elif config.convert_cen_xy_to_radec:
+                # Infer the prefix if possible, after checking for a dropped
+                # leading underscore in case there's no prefix
                 if is_cenx:
-                    params_cen_x[f"{key_full[:-5]}"] = param
+                    prefix_cen, suffix_cen = (
+                        ("", key_full)
+                        if (cen_underscored and (key_full == suffix_cenx[1:]))
+                        else key_full.split(suffix_cenx)
+                    )
+                    params_cen_x[prefix_cen] = param
                 elif is_ceny:
-                    params_cen_y[f"{key_full[:-5]}"] = param
+                    prefix_cen, suffix_cen = (
+                        ("", key_full)
+                        if (cen_underscored and (key_full == suffix_ceny[1:]))
+                        else key_full.split(suffix_ceny)
+                    )
+                    params_cen_y[prefix_cen] = param
 
         if config.convert_cen_xy_to_radec:
             assert params_cen_x.keys() == params_cen_y.keys()
             columns_params_radec, columns_params_radec_err = self._get_columns_params_radec(
-                {k: (x, params_cen_y[k]) for k, x in params_cen_x.items()}, compute_errors
+                {k: (x, params_cen_y[k]) for k, x in params_cen_x.items()},
+                compute_errors,
+                config=config,
             )
 
         # Setup the results table with correct column names
@@ -631,7 +713,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         # assert because this is a logic error if it fails
         idx_flag_first = keys.index("unknown_flag")
         idx_flag_last = (
-            next(iter(idx for idx, key in enumerate(keys[idx_flag_first:]) if key.endswith("cen_x")))
+            next(iter(idx for idx, key in enumerate(keys[idx_flag_first:]) if not key.endswith("_flag")))
             + idx_flag_first
         )
         assert idx_flag_last > idx_flag_first
@@ -725,7 +807,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                 # Set all params to best fit values
                 # In case the optimizer doesn't
                 for (key, (param, offset)), value in zip(
-                    columns_param_free.items(), result_full.params_best,
+                    columns_param_free.items(),
+                    result_full.params_best,
                 ):
                     param.value_transformed = value
                     if param not in params_free_missing:
@@ -746,7 +829,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
 
                     if params_free_missing:
                         columns_param_flux_fit = {
-                            column: param for column, param in columns_param_flux.items()
+                            column: param
+                            for column, param in columns_param_flux.items()
                             if param not in params_free_missing
                         }
                     else:
@@ -855,7 +939,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
 
                         if params_free_missing:
                             columns_err_fitted = [
-                                column for column, param in zip(columns_err, params.values())
+                                column
+                                for column, param in zip(columns_err, params.values())
                                 if param not in params_free_missing
                             ]
                         else:
@@ -893,7 +978,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                                 radec_err -= radec
                                 results[key_ra_err][idx], results[key_dec_err][idx] = np.abs(radec_err)
 
-                results[f"{prefix}chisq_red"][idx] = result_full.chisq_best/size
+                results[f"{prefix}chisq_reduced"][idx] = result_full.chisq_best / size
                 results[f"{prefix}time_full"][idx] = time.process_time() - time_init
             except Exception as e:
                 size = 0 if fitInputs is None else size_new

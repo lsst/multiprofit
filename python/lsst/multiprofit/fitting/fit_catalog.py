@@ -29,6 +29,7 @@ import astropy.units as u
 import lsst.pex.config as pexConfig
 import pydantic
 
+from ..componentconfig import GaussianComponentConfig, SersicComponentConfig
 from ..modeller import ModelFitConfig
 from ..utils import frozen_arbitrary_allowed_config
 
@@ -85,7 +86,144 @@ class CatalogFitterConfig(pexConfig.Config):
         itemtype=str,
         doc="Flag column names to set, keyed by name of exception to catch",
     )
+    naming_scheme = pexConfig.ChoiceField[str](
+        doc="Naming scheme for column names",
+        allowed={
+            "default": "snake_case with {component_name}[_{band}]_{parameter}[_err]",
+            "camel": "CamelCase with {component_name}[_{band}]_{parameter}[Err]",
+            "lsst": "snake_case with [{band}_]{component_name}_{parameter}[Err]",
+        },
+        default="default",
+    )
     prefix_column = pexConfig.Field[str](default="mpf_", doc="Column name prefix")
+    suffix_error = pexConfig.Field[str](
+        default="_err",
+        doc="Default suffix for error columns. Can be overridden by naming_scheme.",
+    )
+
+    _format_flux = {
+        "default": "{label}{band}_flux",
+        "lsst": "{band}_{label}Flux",
+        "camel": "{label}{band}Flux",
+    }
+    _key_cen = {"default": "_cen", "lsst": "_cen", "camel": "Cen"}
+    _key_reff = {"default": f"_{SersicComponentConfig._size_label}", "lsst": "_reff", "camel": "Reff"}
+    _key_rho = {"default": "_rho", "lsst": "_rho", "camel": "Rho"}
+    _key_sigma = {"default": f"_{GaussianComponentConfig._size_label}", "lsst": "_sigma", "camel": "Sigma"}
+    _key_sersicindex = {"default": "_sersic_index", "lsst": "sersic_index", "camel": "SersicIndex"}
+    _suffix_dec = {"default": "_dec", "lsst": "_dec", "camel": "Dec"}
+    _suffix_ra = {"default": "_ra", "lsst": "_ra", "camel": "Ra"}
+    _suffix_x = {"default": "_x", "lsst": "_x", "camel": "X"}
+    _suffix_y = {"default": "_y", "lsst": "_y", "camel": "Y"}
+
+    def _get_label(self, format_name: str, values: dict[str, str]) -> str:
+        """Get the label for part of a column name for a given format.
+
+        Parameters
+        ----------
+        format_name
+            The name of the format to get the label for.
+        values
+            The values of the name by format.
+
+        Returns
+        -------
+        label
+            The formatted label, if specified for that format, else the
+            value for the default format.
+        """
+        return values.get(format_name, values["default"])
+
+    def get_key_cen(self) -> str:
+        """Get the key for centroid columns."""
+        return self._get_label(self.naming_scheme, self._key_cen)
+
+    def get_key_flux(self, band: str, label: str = "") -> str:
+        """Get the key for a flux column.
+
+        Parameters
+        ----------
+        band
+            The band of the flux column.
+        label
+            A label for this flux, e.g. a component name.
+
+        Returns
+        -------
+        key_flux
+            The flux column key.
+        """
+        return self._get_label(self.naming_scheme, self._format_flux).format(band=band, label=label)
+
+    def get_key_reff(self) -> str:
+        """Get the key for Sersic effective radius columns."""
+        return self._get_label(self.naming_scheme, self._key_reff)
+
+    def get_key_rho(self) -> str:
+        """Get the key for ellipse rho columns."""
+        return self._get_label(self.naming_scheme, self._key_rho)
+
+    def get_key_sersicindex(self) -> str:
+        """Get the key for Sersic index columns."""
+        return self._get_label(self.naming_scheme, self._key_sersicindex)
+
+    def get_key_sigma(self) -> str:
+        """Get the key for Gaussian sigma columns."""
+        return self._get_label(self.naming_scheme, self._key_sigma)
+
+    def get_key_size(self, label_size: str) -> str:
+        """Get the key for a size column by its label.
+
+        Parameters
+        ----------
+        label_size
+            The label of the size, usually specified in a ComponentConfig.
+
+        Returns
+        -------
+        key_size
+            The size column key.
+        """
+        if label_size == GaussianComponentConfig._size_label:
+            return self._get_label(self.naming_scheme, self._key_sigma)
+        elif label_size == SersicComponentConfig._size_label:
+            return self._get_label(self.naming_scheme, self._key_reff)
+        return label_size
+
+    def get_prefixed_label(self, label: str, prefix: str) -> str:
+        """Get a prefixed label with redundant underscores removed.
+
+        Parameters
+        ----------
+        label
+            The label to format.
+        prefix
+            The prefix to prepend.
+
+        Returns
+        -------
+        label_prefixed
+            The prefixed label, with redundant underscores removed.
+        """
+        if label.startswith("_") and ((prefix == "") or (prefix[-1] == "_")):
+            return f"{prefix}{label[1:]}"
+        return f"{prefix}{label}"
+
+    def get_suffix_dec(self) -> str:
+        """Get the suffix for declination columns."""
+        return self._get_label(self.naming_scheme, self._suffix_dec)
+
+    def get_suffix_ra(self) -> str:
+        """Get the suffix for right ascension columns."""
+        return self._get_label(self.naming_scheme, self._suffix_ra)
+
+    def get_suffix_x(self) -> str:
+        """Get the suffix for x-axis columns."""
+        return self._get_label(self.naming_scheme, self._suffix_x)
+
+    def get_suffix_y(self) -> str:
+        """Get the suffix for y-axis columns."""
+        return self._get_label(self.naming_scheme, self._suffix_y)
 
     def schema(
         self,
@@ -110,7 +248,7 @@ class CatalogFitterConfig(pexConfig.Config):
             ColumnInfo(key="time_eval", dtype="f8", unit=u.s),
             ColumnInfo(key="time_fit", dtype="f8", unit=u.s),
             ColumnInfo(key="time_full", dtype="f8", unit=u.s),
-            ColumnInfo(key="chisq_red", dtype="f8"),
+            ColumnInfo(key="chisq_reduced", dtype="f8"),
             ColumnInfo(key="unknown_flag", dtype="bool"),
         ]
         schema.extend([ColumnInfo(key=key, dtype="bool") for key in self.flag_errors.keys()])

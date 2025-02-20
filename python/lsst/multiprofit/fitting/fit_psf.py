@@ -234,9 +234,16 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
     def parameters(self) -> dict[str, g2f.ParameterD]:
         """Return the free parameters for the PSF model by name."""
         parameters = {}
-        has_prefix_group = self.config.model.has_prefix_group()
+        config = self.config
+        has_prefix_group = config.model.has_prefix_group()
         components = self.psf_model.components
         idx_comp_first = 0
+
+        label_cen = config.get_key_cen()
+        label_rho = config.get_key_rho()
+        label_flux = config.get_key_flux("")
+        label_fluxfrac = f"{label_flux}frac"
+        suffix_x, suffix_y = config.get_suffix_x(), config.get_suffix_y()
 
         # Iterate over each component group
         for name_group, config_group in self.componentgroup_configs.items():
@@ -255,20 +262,28 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
                 # The last component needs special handling if is_fractional
                 is_last = idx_comp_group == idx_last
                 component = components[idx_comp_first + idx_comp_group]
-                label_size = config_comp.get_size_label()
-                prefix_comp = f"{prefix_group}{name_comp}{'_' if name_comp else ''}"
+                prefix_comp = f"{prefix_group}{name_comp}"
+                key_size = config.get_prefixed_label(
+                    config.get_key_size(config_comp.get_size_label()),
+                    prefix_comp,
+                )
+                key_rho = config.get_prefixed_label(label_rho, prefix_comp)
+
                 # Give the centroid parameters an appropriate prefix
                 if multicen or (idx_comp_group == 0):
                     prefix_cen = prefix_comp if multicen else prefix_group
-                    parameters[f"{prefix_cen}cen_x"] = component.centroid.x_param
-                    parameters[f"{prefix_cen}cen_y"] = component.centroid.y_param
+                    # Avoid redundant -underscores if there's nothing to prefix
+                    # or an existing prefix starting with an underscore
+                    key_cen = config.get_prefixed_label(label_cen, prefix_cen)
+                    parameters[f"{key_cen}{suffix_x}"] = component.centroid.x_param
+                    parameters[f"{key_cen}{suffix_y}"] = component.centroid.y_param
                 # Add each free shape parameter
                 if not config_comp.size_x.fixed:
-                    parameters[f"{prefix_comp}{label_size}_x"] = component.ellipse.size_x_param
+                    parameters[f"{key_size}{suffix_x}"] = component.ellipse.size_x_param
                 if not config_comp.size_y.fixed:
-                    parameters[f"{prefix_comp}{label_size}_y"] = component.ellipse.size_y_param
+                    parameters[f"{key_size}{suffix_y}"] = component.ellipse.size_y_param
                 if not config_comp.rho.fixed:
-                    parameters[f"{prefix_comp}rho"] = component.ellipse.rho_param
+                    parameters[key_rho] = component.ellipse.rho_param
 
                 # TODO: return this to component.integralmodel
                 # when binding for g2f.FractionalIntegralModel is fixed
@@ -284,7 +299,7 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
                         f"{params_flux=} has len={len(params_flux)} but expected {n_params_flux_expect}"
                     )
                 if has_params_flux:
-                    parameters[f"{prefix_comp}flux"] = params_flux[0]
+                    parameters[f"{prefix_comp}{label_flux}"] = params_flux[0]
                 # TODO: return this to component.integralmodel
                 # when binding for g2f.FractionalIntegralModel is fixed
                 params_fluxfrac = [
@@ -302,7 +317,7 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
                             )
                     else:
                         if not config_comp.fluxfrac.fixed:
-                            parameters[f"{prefix_comp}fluxfrac"] = params_fluxfrac[-1]
+                            parameters[f"{prefix_comp}{label_fluxfrac}"] = params_fluxfrac[-1]
                             n_params_flux_frac += 1
                     if len(params_fluxfrac) != n_params_flux_frac:
                         raise RuntimeError(
@@ -621,7 +636,7 @@ class CatalogPsfFitter:
                 results[f"{prefix}n_iter"][idx] = result_full.n_eval_func
                 results[f"{prefix}time_eval"][idx] = result_full.time_eval
                 results[f"{prefix}time_fit"][idx] = result_full.time_run
-                results[f"{prefix}chisq_red"][idx] = result_full.chisq_best/size
+                results[f"{prefix}chisq_reduced"][idx] = result_full.chisq_best / size
                 if config.config_fit.eval_residual:
                     results[f"{prefix}n_eval_jac"][idx] = result_full.n_eval_jac
 
@@ -635,9 +650,7 @@ class CatalogPsfFitter:
                 column = self.errors_expected.get(e.__class__, "")
                 if column:
                     row[f"{prefix}{column}"] = True
-                    logger.debug(
-                        f"{id_source=} ({idx}/{n_rows}) PSF fit failed with known exception={e}"
-                    )
+                    logger.debug(f"{id_source=} ({idx}/{n_rows}) PSF fit failed with known exception={e}")
                 else:
                     row[f"{prefix}unknown_flag"] = True
                     logger.info(
