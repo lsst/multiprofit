@@ -611,7 +611,6 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             catalog_multi=catalog_multi, catexps=catexps, config_data=config_data, logger=logger, **kwargs
         )
 
-        channels = self.get_channels(catexps)
         model_sources, priors = config_data.sources_priors
         # TODO: If free Observation params are ever supported, make null Data
         # Because config_data knows nothing about the Observation(s)
@@ -687,17 +686,9 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             )
 
         # Setup the results table with correct column names
-        columns = config.schema([channel.name for channel in channels.values()])
-        keys = [column.key for column in columns]
-
         n_rows = len(catalog_multi)
-        dtypes = [(f'{prefix if col.key != config.column_id else ""}{col.key}', col.dtype) for col in columns]
-        meta = {"config": config.toDict()}
-        results = Table(
-            data=np.full(n_rows, 0, dtype=dtypes),
-            units=[x.unit for x in columns],
-            meta=meta,
-        )
+        channels = self.get_channels(catexps)
+        results, columns = config.make_catalog(n_rows, bands=list(channels.keys()))
 
         # Copy centroid error columns into results ( if needed)
         self.copy_centroid_errors(
@@ -708,24 +699,6 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             catexps=catexps,
             config_data=config_data,
         )
-
-        # Validate that the columns are in the right order
-        # assert because this is a logic error if it fails
-        idx_flag_first = keys.index("unknown_flag")
-        idx_flag_last = (
-            next(iter(idx for idx, key in enumerate(keys[idx_flag_first:]) if not key.endswith("_flag")))
-            + idx_flag_first
-        )
-        assert idx_flag_last > idx_flag_first
-
-        for idx in range(idx_flag_first, idx_flag_last):
-            column_in = columns[idx]
-            column_out = results.columns[idx]
-            if idx < idx_flag_last:
-                assert column_out.dtype == bool
-                assert column_in.key.endswith("_flag")
-            else:
-                assert column_out.dtype == float
 
         # dummy size for first iteration
         size, size_new = 0, 0
