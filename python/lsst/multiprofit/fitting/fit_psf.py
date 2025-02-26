@@ -31,10 +31,8 @@ from functools import cached_property
 import logging
 import time
 from typing import Any, ClassVar, Mapping, Type
-import warnings
 
 import astropy
-from astropy.table import Table
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig
@@ -566,28 +564,9 @@ class CatalogPsfFitter:
         n_rows = len(catalog)
         range_idx = range(n_rows)
 
-        columns = config.schema()
-        keys = [column.key for column in columns]
+        results, columns = config.make_catalog(n_rows)
         prefix = config.prefix_column
         columns_param = {f"{prefix}{key}": param for key, param in params.items()}
-        idx_flag_first = keys.index("unknown_flag")
-        idx_var_first = (
-            next(iter(idx for idx, key in enumerate(keys[idx_flag_first:]) if key.endswith("cen_x")))
-            + idx_flag_first
-        )
-        dtypes = [(f'{prefix if col.key != config.column_id else ""}{col.key}', col.dtype) for col in columns]
-        meta = {"config": config.toDict()}
-
-        # Filter out warnings about casting int to nan (which unavoidably
-        # returns -max_int, not nan)
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", "invalid value encountered in cast", RuntimeWarning)
-            results = Table(
-                data=np.full(n_rows, np.nan, dtype=dtypes), units=[x.unit for x in columns], meta=meta
-            )
-        # Set nan-default flags to False instead
-        for flag in columns[idx_flag_first:idx_var_first]:
-            results[f"{prefix}{flag.key}"] = False
 
         # dummy size for first iteration
         size, size_new = 0, 0

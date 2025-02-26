@@ -25,8 +25,10 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import ClassVar
 
+from astropy.table import Table
 import astropy.units as u
 import lsst.pex.config as pexConfig
+import numpy as np
 import pydantic
 
 from ..componentconfig import GaussianComponentConfig, SersicComponentConfig
@@ -80,11 +82,17 @@ class CatalogFitterConfig(pexConfig.Config):
     fit_centroid = pexConfig.Field[bool](default=True, doc="Fit centroid parameters")
     fit_linear_init = pexConfig.Field[bool](default=True, doc="Fit linear parameters after initialization")
     fit_linear_final = pexConfig.Field[bool](default=True, doc="Fit linear parameters after optimization")
+    float_fill_value = pexConfig.Field[float](
+        default=np.nan, doc="Fill value for float fields when creating the output table."
+    )
     flag_errors = pexConfig.DictField(
         default={},
         keytype=str,
         itemtype=str,
         doc="Flag column names to set, keyed by name of exception to catch",
+    )
+    integer_fill_value = pexConfig.Field[int](
+        default=-1, doc="Fill value for integer fields when creating the output table."
     )
     naming_scheme = pexConfig.ChoiceField[str](
         doc="Naming scheme for column names",
@@ -224,6 +232,58 @@ class CatalogFitterConfig(pexConfig.Config):
     def get_suffix_y(self) -> str:
         """Get the suffix for y-axis columns."""
         return self._get_label(self.naming_scheme, self._suffix_y)
+
+    def make_catalog(self, n_rows: int, **kwargs):
+        """Make a catalog with default-initialized column values.
+
+        Parameters
+        ----------
+        n_rows
+            The number of rows to create.
+        **kwargs
+            Keyword arguments to pass to self.schema.
+
+        Returns
+        -------
+        catalog
+            The initialized catalog.
+        columns
+            The columns as returned by self.schema.
+        """
+        columns = self.schema(**kwargs)
+        keys = [column.key for column in columns]
+        prefix = self.prefix_column
+
+        idx_flag_first = keys.index("unknown_flag")
+        idx_flag_last = idx_flag_first + len(self.flag_errors)
+        dtypes = [(f'{prefix if col.key != self.column_id else ""}{col.key}', col.dtype) for col in columns]
+
+        results = Table(np.empty(n_rows, dtype=dtypes))
+        for colname in results.colnames:
+            column = results[colname]
+            dtype = column.dtype
+            if (
+                value := (
+                    self.float_fill_value
+                    if np.issubdtype(dtype, np.floating)
+                    else (self.integer_fill_value if np.issubdtype(dtype, np.integer) else None)
+                )
+            ) is not None:
+                column[:] = value
+
+        # Set nan-default flags to False instead
+        errors = []
+        for flag in columns[idx_flag_first : (idx_flag_last + 1)]:
+            column = results[f"{prefix}{flag.key}"]
+            column[:] = False
+            if not ((column.dtype == bool) and column.name.endswith("_flag")):
+                errors.append(f"{column.name=} should end with _flag and {column.dtype=} must be bool")
+        if errors:
+            errors.append(f"These may be logic errors in {self=}")
+            raise RuntimeError("\n".join(errors))
+        results.meta["config"] = self.toDict()
+
+        return results, columns
 
     def schema(
         self,
