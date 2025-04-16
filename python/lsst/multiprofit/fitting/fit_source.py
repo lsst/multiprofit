@@ -23,7 +23,7 @@ from abc import ABC, abstractmethod
 from functools import cached_property
 import logging
 import time
-from typing import Any, ClassVar, Iterable, Mapping, Sequence, Type
+from typing import Any, ClassVar, Iterable, Mapping, Self, Sequence, Type
 
 import astropy
 from astropy.table import Table
@@ -325,8 +325,9 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
     config: CatalogSourceFitterConfig = pydantic.Field(title="A CatalogSourceFitterConfig to be frozen")
 
     @pydantic.model_validator(mode="after")
-    def validate_config(self) -> None:
+    def validate_config(self) -> Self:
         self.config.validate()
+        return self
 
     @cached_property
     def components(self) -> tuple[g2f.Component]:
