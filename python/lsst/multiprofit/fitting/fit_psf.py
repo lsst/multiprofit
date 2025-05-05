@@ -412,11 +412,18 @@ class CatalogPsfFitter:
         data
             A DataD instance than can be used to fit a PSF model.
         """
-        # TODO: Improve these arbitrary definitions
-        # Look at S/N of PSF stars?
-        background = np.std(img_psf[img_psf < 2 * np.abs(np.min(img_psf))])
-        # Hacky fix; PSFs shouldn't have negative values but often do
+        # TODO: Try to improve these ad-hoc settings after DM-49008 merges
+        # e.g. estimate PSF model noise from S/N of PSF stars?
+        # If more than 1% of pixels are negative, try to estimate noise
+        if np.sum(img_psf < 0) / img_psf.size > 0.01:
+            background = np.std(img_psf[img_psf < 2 * np.abs(np.min(img_psf))])
+        # otherwise, try to estimate noise from the lowest-values pixels
+        # There might not actually be much noise; in that case, the
+        # background value is not going to matter much anyway
+        else:
+            background = np.max((1e-10, np.std(img_psf[img_psf <= np.percentile(img_psf, 5.0)])))
         min_psf = np.min(img_psf)
+        # ensure there are no negative values before sqrt
         if not (background > -min_psf):
             background = -1.1 * min_psf
         img_sig_inv = np.sqrt(gain / (img_psf + background))
