@@ -959,17 +959,27 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                 column = self.errors_expected.get(e.__class__, "")
                 if column:
                     row[f"{prefix}{column}"] = True
-                    logger.debug(f"{id_source=} ({idx=}/{n_rows}) fit failed with known exception={e}")
+                    logger.debug(
+                        "id_source=%i (idx=%i/%i) fit failed with known exception: %s",
+                        id_source,
+                        idx,
+                        n_rows,
+                        e,
+                    )
                 else:
                     row[f"{prefix}unknown_flag"] = True
                     logger.info(
-                        f"{id_source=} ({idx=}/{n_rows}) fit failed with unexpected exception={e}",
+                        "id_source=%i (idx=%i/%i) fit failed with unexpected exception: %s",
+                        id_source,
+                        idx,
+                        n_rows,
+                        e,
                         exc_info=1,
                     )
 
         n_unknown = np.sum(row[f"{prefix}unknown_flag"])
         if n_unknown > 0:
-            logger.warning(f"{n_unknown}/{n_rows} PSF fits failed with unexpected exceptions")
+            logger.warning("%i/%i source fits failed with unexpected exceptions", n_unknown, n_rows)
 
         return results
 
