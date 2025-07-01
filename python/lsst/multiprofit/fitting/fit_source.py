@@ -30,6 +30,7 @@ from astropy.table import Table
 import astropy.units as u
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig
+from lsst.utils.logging import PeriodicLogger
 import numpy as np
 import pydantic
 
@@ -727,12 +728,17 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         # Remember to filter out fixed centroids from params
         # assert list(params.values()) == get_params_uniq(model, fixed=False)
 
+        time_init_all = time.process_time()
+        logger_periodic = PeriodicLogger(logger)
+        n_skipfail = 0
+
         for idx in range_idx:
             time_init = time.process_time()
             row = results[idx]
             source_multi = catalog_multi[idx]
             id_source = source_multi[config.column_id]
             row[config.column_id] = id_source
+            time_final = time_init
 
             try:
                 data, psf_models = config.make_model_data(idx_row=idx, catexps=catexps)
@@ -953,8 +959,10 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                                 results[key_ra_err][idx], results[key_dec_err][idx] = np.abs(radec_err)
 
                 results[f"{prefix}chisq_reduced"][idx] = result_full.chisq_best / size
-                results[f"{prefix}time_full"][idx] = time.process_time() - time_init
+                time_final = time.process_time()
+                results[f"{prefix}time_full"][idx] = time_final - time_init
             except Exception as e:
+                n_skipfail += 1
                 size = 0 if fitInputs is None else size_new
                 column = self.errors_expected.get(e.__class__, "")
                 if column:
@@ -976,6 +984,13 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                         e,
                         exc_info=1,
                     )
+            logger_periodic.log(
+                "Fit idx=%i/%i sources (%i skipped/failed) in %.2f",
+                idx,
+                n_rows,
+                n_skipfail,
+                time_final - time_init_all,
+            )
 
         n_unknown = np.sum(row[f"{prefix}unknown_flag"])
         if n_unknown > 0:

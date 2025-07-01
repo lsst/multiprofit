@@ -36,6 +36,7 @@ import astropy
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig
+from lsst.utils.logging import PeriodicLogger
 import numpy as np
 import pydantic
 
@@ -578,6 +579,9 @@ class CatalogPsfFitter:
         # dummy size for first iteration
         size, size_new = 0, 0
         fitInputs = FitInputsDummy()
+        time_init_all = time.process_time()
+        logger_periodic = PeriodicLogger(logger)
+        n_skipfail = 0
 
         for idx in range_idx:
             time_init = time.process_time()
@@ -585,6 +589,7 @@ class CatalogPsfFitter:
             source = catalog[idx]
             id_source = source[config.column_id]
             row[config.column_id] = id_source
+            time_final = time_init
 
             try:
                 self.check_source(source, config=config)
@@ -630,8 +635,10 @@ class CatalogPsfFitter:
                     param.value_transformed = value
                     results[key][idx] = param.value
 
-                results[f"{prefix}time_full"][idx] = time.process_time() - time_init
+                time_final = time.process_time()
+                results[f"{prefix}time_full"][idx] = time_final - time_init
             except Exception as e:
+                n_skipfail += 1
                 size = 0 if fitInputs is None else size_new
                 column = self.errors_expected.get(e.__class__, "")
                 if column:
@@ -653,6 +660,13 @@ class CatalogPsfFitter:
                         e,
                         exc_info=1,
                     )
+            logger_periodic.log(
+                "Fit idx=%i/%i PSFs (%i skipped/failed) in %.2f",
+                idx,
+                n_rows,
+                n_skipfail,
+                time_final - time_init_all,
+            )
 
         n_unknown = np.sum(row[f"{prefix}unknown_flag"])
         if n_unknown > 0:
