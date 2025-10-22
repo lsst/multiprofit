@@ -286,7 +286,7 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
         if self.config_fit.eval_residual:
             columns.append(ColumnInfo(key="n_eval_jac", dtype="i4"))
         if self.fit_linear_final:
-            columns.append(ColumnInfo(key="delta_ll_fit_linear", dtype="f8"))
+            columns.append(ColumnInfo(key="delta_lnL_fit_linear", dtype="f8"))
         if self.fit_psmodel_final:
             columns.append(ColumnInfo(key="delta_lnL_fit_ps", dtype="f8"))
         return columns
@@ -877,7 +877,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                         model=model, ratio_min=0.01, validate=True
                     )
                     loglike_final = max(loglike_init, loglike_new)
-                    results[f"{prefix}delta_ll_fit_linear"][idx] = np.sum(loglike_new) - np.sum(loglike_init)
+                    results[f"{prefix}delta_lnL_fit_linear"][idx] = np.sum(loglike_new) - np.sum(loglike_init)
 
                     if params_free_missing:
                         columns_param_flux_fit = {
