@@ -34,10 +34,11 @@ from lsst.utils.logging import PeriodicLogger
 import numpy as np
 import pydantic
 
-from ..componentconfig import Fluxes
+from ..componentconfig import Fluxes, GaussianComponentConfig
 from ..errors import NoDataError
 from ..modelconfig import ModelConfig
 from ..modeller import FitInputsDummy, Modeller
+from ..sourceconfig import SourceConfig, ComponentGroupConfig
 from ..utils import frozen_arbitrary_allowed_config, get_params_uniq
 from .fit_catalog import CatalogExposureABC, CatalogFitterConfig, ColumnInfo
 
@@ -111,6 +112,10 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
     )
     config_model = pexConfig.ConfigField[ModelConfig](doc="Source model configuration")
     convert_cen_xy_to_radec = pexConfig.Field[bool](default=True, doc="Convert cen x/y params to RA/dec")
+    fit_psmodel_final = pexConfig.Field[bool](
+        default=False,
+        doc="Fit a point source model after optimization",
+    )
     prior_cen_x_stddev = pexConfig.Field[float](
         default=0, doc="Prior std. dev. on x centroid (ignored if not >0)"
     )
@@ -170,6 +175,50 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
 
         data = g2f.DataD(observations)
         return data, psf_models
+
+    def make_point_sources(
+        self,
+        channels: Iterable[g2f.Channel],
+        sources: list[g2f.Source],
+    ) -> tuple[list[g2f.Source], list[g2f.Prior]]:
+        """Make initialized point sources given channels.
+
+        Parameters
+        ----------
+        channels
+            The channels to initialize fluxes for.
+        sources
+            List of sources.
+
+        Returns
+        -------
+        sources
+            The list of initialized sources.
+        priors
+            The list of priors.
+
+        Notes
+        -----
+        The prior list is always empty, but is returned to keep this function
+        consistent with make_sources.
+        """
+        point_sources = []
+        fluxes = [[{channel: 1.0 for channel in channels}]]
+
+        for (name_src, config_src), source in zip(self.config_model.sources.items(), sources):
+            centroids = next(iter(config_src.component_groups.values())).centroids
+            config_src_psf = SourceConfig(
+                component_groups={
+                    "": ComponentGroupConfig(
+                        centroids=centroids,
+                        components_gauss={"": GaussianComponentConfig()},
+                    )
+                }
+            )
+            source, _ = config_src_psf.make_source(fluxes)
+            point_sources.append(source)
+
+        return point_sources, []
 
     def make_sources(
         self,
@@ -237,7 +286,9 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
         if self.config_fit.eval_residual:
             columns.append(ColumnInfo(key="n_eval_jac", dtype="i4"))
         if self.fit_linear_final:
-            columns.append(ColumnInfo(key="delta_ll_fit_linear", dtype="f8"))
+            columns.append(ColumnInfo(key="delta_lnL_fit_linear", dtype="f8"))
+        if self.fit_psmodel_final:
+            columns.append(ColumnInfo(key="delta_lnL_fit_ps", dtype="f8"))
         return columns
 
     def schema(
@@ -614,6 +665,26 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         )
 
         model_sources, priors = config_data.sources_priors
+        if config.fit_psmodel_final:
+            channels = config_data.channels
+            sources_psmodel, priors_psmodel = config.make_point_sources(channels, model_sources)
+            params_psmodel = sources_psmodel[0].parameters()
+            cenx_psmodel, ceny_psmodel = None, None
+            fluxes_psmodel = {}
+            idx_band = 0
+            for param in params_psmodel:
+                if isinstance(param, g2f.CentroidXParameterD):
+                    if cenx_psmodel is not None:
+                        raise RuntimeError("Point source model found multiple x centroids")
+                    cenx_psmodel = param
+                elif isinstance(param, g2f.CentroidYParameterD):
+                    if ceny_psmodel is not None:
+                        raise RuntimeError("Point source model found multiple y centroids")
+                    ceny_psmodel = param
+                elif isinstance(param, g2f.IntegralParameterD):
+                    fluxes_psmodel[channels[idx_band]] = param
+                    idx_band += 1
+
         # TODO: If free Observation params are ever supported, make null Data
         # Because config_data knows nothing about the Observation(s)
         params = config_data.parameters
@@ -622,7 +693,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         columns_param_fixed: dict[str, tuple[g2f.ParameterD, float]] = {}
         columns_param_free: dict[str, tuple[g2f.ParameterD, float]] = {}
         columns_param_flux: dict[str, g2f.IntegralParameterD] = {}
-        params_cen_x: dict[str, g2f.CentroidYParameterD] = {}
+        params_cen_x: dict[str, g2f.CentroidXParameterD] = {}
         params_cen_y: dict[str, g2f.CentroidYParameterD] = {}
         columns_err = []
 
@@ -805,7 +876,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                     loglike_init, loglike_new = self.modeller.fit_model_linear(
                         model=model, ratio_min=0.01, validate=True
                     )
-                    results[f"{prefix}delta_ll_fit_linear"][idx] = np.sum(loglike_new) - np.sum(loglike_init)
+                    loglike_final = max(loglike_init, loglike_new)
+                    results[f"{prefix}delta_lnL_fit_linear"][idx] = np.sum(loglike_new) - np.sum(loglike_init)
 
                     if params_free_missing:
                         columns_param_flux_fit = {
@@ -818,6 +890,8 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
 
                     for column, param in columns_param_flux_fit.items():
                         results[column][idx] = param.value
+                else:
+                    loglike_final = model.evaluate()
 
                 if config.convert_cen_xy_to_radec:
                     for key_ra, key_dec, key_cen_x, key_cen_y in columns_params_radec:
@@ -825,6 +899,16 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                         cen_x, cen_y = results[key_cen_x][idx], results[key_cen_y][idx]
                         radec = self.get_model_radec(source_multi, cen_x, cen_y)
                         results[key_ra][idx], results[key_dec][idx] = radec
+
+                if config.fit_psmodel_final:
+                    cen_x, cen_y = results[key_cen_x][idx], results[key_cen_y][idx]
+                    cenx_psmodel.value = cen_x
+                    ceny_psmodel.value = cen_y
+                    model_psf = g2f.ModelD(data=data, psfmodels=psf_models, sources=sources_psmodel)
+                    _ = self.modeller.fit_model_linear(model_psf)
+                    model_psf.setup_evaluators(evaluatormode=g2f.EvaluatorMode.loglike)
+                    loglike_psfmodel = model_psf.evaluate()
+                    results[f"{prefix}delta_lnL_fit_ps"][idx] = loglike_final[0] - loglike_psfmodel[0]
 
                 if compute_errors:
                     errors = []

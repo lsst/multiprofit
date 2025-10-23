@@ -53,6 +53,7 @@ def fitter_config() -> CatalogSourceFitterConfig:
                 ),
             },
         ),
+        fit_psmodel_final=True,
     )
     return config
 
