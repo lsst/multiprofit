@@ -450,6 +450,8 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
 
                     key_comp = name_comp if is_multicomp else ""
                     prefix_comp = f"{prefix_group}{key_comp}"
+                    prefix_flux = "" if ((not prefix_comp) or (prefix_comp[-1] == "_")) else "_"
+                    prefix_comp_flux = f"{prefix_comp}{prefix_flux}"
                     key_size = config.get_prefixed_label(
                         config.get_key_size(config_comp.get_size_label()),
                         prefix_comp,
@@ -480,7 +482,7 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
                             if len(params_flux) != n_channels:
                                 raise ValueError(f"{params_flux=} len={len(params_flux)} != {n_channels=}")
                         for channel, param_flux in zip(self.channels, params_flux):
-                            key_flux = config.get_key_flux(label=prefix_comp, band=channel.name)
+                            key_flux = config.get_key_flux(label=prefix_comp_flux, band=channel.name)
                             parameters[key_flux] = param_flux
                     if hasattr(config_comp, "sersic_index") and not config_comp.sersic_index.fixed:
                         parameters[config.get_prefixed_label(label_sersic, prefix_comp)] = (
@@ -548,8 +550,9 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         suffix_ra, suffix_dec = config.get_suffix_ra(), config.get_suffix_dec()
 
         for key_base, (param_cen_x, param_cen_y) in params_radec.items():
-            # This removes redundant underscores
-            key_base_cen = config.get_prefixed_label(key_cen, key_base)
+            # key_base will already have config.prefix_column, so it must
+            # not be added again
+            key_base_cen = config.get_prefixed_label(f"{key_base}{key_cen}", "")
 
             if param_cen_y is None:
                 raise RuntimeError(
