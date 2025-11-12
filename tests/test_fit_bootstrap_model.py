@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import math
+
 import astropy.table
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit.componentconfig import (
@@ -223,11 +225,13 @@ def test_fit_psf(config_fitter_psfs, tables_psf_fits):
         params_init = psf_model_init.parameters()
         params_fit = psf_model_fit.parameters()
         assert len(params_init) == len(params_fit)
+        sigma_min_sq = config_data_psf.config.sigma_min**2
         for p_init, p_meas in zip(params_init, params_fit):
             assert p_meas.fixed == p_init.fixed
             if p_meas.fixed:
                 assert p_init.value == p_meas.value
             else:
+                value = p_meas.value
                 # TODO: come up with better (noise-dependent) thresholds here
                 if isinstance(p_init, g2f.IntegralParameterD):
                     atol, rtol = 0, 0.02
@@ -235,9 +239,11 @@ def test_fit_psf(config_fitter_psfs, tables_psf_fits):
                     atol, rtol = 0.1, 0.01
                 elif isinstance(p_init, g2f.RhoParameterD):
                     atol, rtol = 0.05, 0.1
+                elif isinstance(p_init, g2f.SigmaXParameterD) or isinstance(p_init, g2f.SigmaYParameterD):
+                    value = math.sqrt(value**2 + sigma_min_sq)
                 else:
                     atol, rtol = 0.01, 0.1
-                assert np.isclose(p_init.value, p_meas.value, atol=atol, rtol=rtol)
+                assert np.isclose(p_init.value, value, atol=atol, rtol=rtol)
 
 
 def test_fit_source(config_fitter_source, config_data_sources):

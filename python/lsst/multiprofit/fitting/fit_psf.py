@@ -29,6 +29,7 @@ __all__ = [
 from abc import abstractmethod
 from functools import cached_property
 import logging
+import math
 import time
 from typing import Any, ClassVar, Mapping, Type
 
@@ -83,6 +84,11 @@ class CatalogPsfFitterConfig(CatalogFitterConfig):
         doc="PSF model configuration",
     )
     prior_axrat_mean = pexConfig.Field[float](default=0.95, doc="Mean for axis ratio prior")
+    sigma_min = pexConfig.Field[float](
+        default=0.8,
+        doc="Minimum sigma in pixels for PSF components. Must be >=0.8 to avoid undersampling.",
+        check=lambda x: x >= 0.8,
+    )
 
     def make_psf_model(
         self,
@@ -565,8 +571,13 @@ class CatalogPsfFitter:
             for param in get_params_uniq(model_source, linear=False, channel=g2f.Channel.NONE, fixed=False)
             if isinstance(param, g2f.ProperFractionParameterD)
         )
-        # We're fitting the PSF, so there's nothing to convolve with
+        # We're fitting the PSF, so make a single Gaussian
         model_psf = make_psf_model_null()
+        # Set the size to the minimum sigma to avoid undersampling
+        ellipse = model_psf.components[0].ellipse
+        ellipse.sigma_x_param.value = config.sigma_min
+        ellipse.sigma_y_param.value = config.sigma_min
+        sigma_min_sq = config.sigma_min**2
 
         catalog = catexp.get_catalog()
         n_rows = len(catalog)
@@ -574,7 +585,12 @@ class CatalogPsfFitter:
 
         results, columns = config.make_catalog(n_rows)
         prefix = config.prefix_column
-        columns_param = {f"{prefix}{key}": param for key, param in params.items()}
+        columns_param = {}
+        for key, param in params.items():
+            is_sigma = isinstance(param, g2f.SigmaXParameterD) or isinstance(param, g2f.SigmaYParameterD)
+            columns_param[f"{prefix}{key}"] = param, is_sigma
+            if is_sigma:
+                param.value = math.sqrt(max(param.value**2 - sigma_min_sq, 0.1))
 
         # dummy size for first iteration
         size, size_new = 0, 0
@@ -631,9 +647,12 @@ class CatalogPsfFitter:
                 if config.config_fit.eval_residual:
                     results[f"{prefix}n_eval_jac"][idx] = result_full.n_eval_jac
 
-                for (key, param), value in zip(columns_param.items(), result_full.params_best):
+                for (key, (param, is_sigma)), value in zip(columns_param.items(), result_full.params_best):
                     param.value_transformed = value
-                    results[key][idx] = param.value
+                    value = param.value
+                    if is_sigma:
+                        value = math.sqrt(sigma_min_sq**2 + value**2)
+                    results[key][idx] = value
 
                 time_final = time.process_time()
                 results[f"{prefix}time_full"][idx] = time_final - time_init
