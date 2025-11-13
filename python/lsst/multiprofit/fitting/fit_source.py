@@ -908,6 +908,9 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                     _ = self.modeller.fit_model_linear(model_psf)
                     model_psf.setup_evaluators(evaluatormode=g2f.EvaluatorMode.loglike)
                     loglike_psfmodel = model_psf.evaluate()
+                    # Reset fluxes for the next fit
+                    for param in fluxes_psmodel.values():
+                        param.value = 1.
                     results[f"{prefix}delta_lnL_fit_ps"][idx] = loglike_final[0] - loglike_psfmodel[0]
 
                 if compute_errors:
