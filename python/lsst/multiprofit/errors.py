@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["CatalogError", "NoDataError", "PsfRebuildFitFlagError"]
+__all__ = ["CatalogError", "NoDataError", "PsfRebuildFitFlagError", "RaDecConversionNotImplementedError"]
 
 from abc import abstractmethod
 
@@ -48,3 +48,17 @@ class PsfRebuildFitFlagError(RuntimeError):
     @classmethod
     def column_name(cls) -> str:
         return "psf_fit_flag"
+
+
+class RaDecConversionNotImplementedError(NotImplementedError):
+    """NotImplementedError for classes that haven't overridden methods to
+    convert pixel centroids to sky RA/dec.
+
+    This is a configuration error that is difficult to test for before
+    fitting individual objects but should generally not be caught, except
+    in unit tests.
+    """
+
+    @classmethod
+    def column_name(cls) -> str:
+        return "ra_dec_conversion_not_implemented_flag"

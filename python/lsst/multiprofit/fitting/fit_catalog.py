@@ -121,6 +121,7 @@ class CatalogFitterConfig(pexConfig.Config):
     _key_sersicindex = {"default": "_sersic_index", "lsst": "sersic_index", "camel": "SersicIndex"}
     _suffix_dec = {"default": "_dec", "lsst": "_dec", "camel": "Dec"}
     _suffix_ra = {"default": "_ra", "lsst": "_ra", "camel": "Ra"}
+    _suffix_ra_dec_cov = {"default": "_ra_dec_cov", "lsst": "_ra_dec_Cov", "camel": "RaDecCov"}
     _suffix_x = {"default": "_x", "lsst": "_x", "camel": "X"}
     _suffix_y = {"default": "_y", "lsst": "_y", "camel": "Y"}
 
@@ -224,6 +225,10 @@ class CatalogFitterConfig(pexConfig.Config):
     def get_suffix_ra(self) -> str:
         """Get the suffix for right ascension columns."""
         return self._get_label(self.naming_scheme, self._suffix_ra)
+
+    def get_suffix_ra_dec_cov(self) -> str:
+        """Get the suffix for right ascension columns."""
+        return self._get_label(self.naming_scheme, self._suffix_ra_dec_cov)
 
     def get_suffix_x(self) -> str:
         """Get the suffix for x-axis columns."""
