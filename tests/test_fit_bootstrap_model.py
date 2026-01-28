@@ -32,6 +32,7 @@ from lsst.multiprofit.componentconfig import (
     SersicComponentConfig,
     SersicIndexParameterConfig,
 )
+from lsst.multiprofit.errors import RaDecConversionNotImplementedError
 from lsst.multiprofit.fitting.fit_bootstrap_model import (
     CatalogExposurePsfBootstrap,
     CatalogExposureSourcesBootstrap,
@@ -251,8 +252,26 @@ def test_fit_source(config_fitter_source, config_data_sources):
     # We don't have or need a multiband input catalog - just use the first one
     catalog_multi = next(iter(config_data_sources.values())).get_catalog()
     catexps = list(config_data_sources.values())
+
+    defer_conversion = config_fitter_source.config.defer_radec_conversion
+    config_fitter_source.config.convert_cen_xy_to_radec = True
+
+    conversion_error_cls = RaDecConversionNotImplementedError
+    conversion_error_key = conversion_error_cls.column_name()
+    fitter.errors_expected[conversion_error_cls] = conversion_error_key
+    config_fitter_source.config.flag_errors[conversion_error_key] = conversion_error_cls.__name__
+
+    # Test both code paths for failure to convert RA/Dec, returning to original
+    for value in (not defer_conversion, defer_conversion):
+        config_fitter_source.config.defer_radec_conversion = value
+        results = fitter.fit(catalog_multi=catalog_multi, catexps=catexps, config_data=config_fitter_source)
+        assert np.all(results[f"mpf_{conversion_error_key}"] == 1)
+
+    config_fitter_source.config.convert_cen_xy_to_radec = False
     results = fitter.fit(catalog_multi=catalog_multi, catexps=catexps, config_data=config_fitter_source)
     assert len(results) == n_sources
+    assert np.sum(results["mpf_unknown_flag"]) == 0
+    assert all(np.isfinite(list(results[0].values())))
 
     model = fitter.get_model(
         0,
@@ -275,9 +294,6 @@ def test_fit_source(config_fitter_source, config_data_sources):
         import matplotlib.pyplot as plt
 
         plt.show()
-
-    assert np.sum(results["mpf_unknown_flag"]) == 0
-    assert all(np.isfinite(list(results[0].values())))
 
     variances = []
     for return_negative in (False, True):

@@ -184,9 +184,6 @@ class CatalogSourceFitterBootstrap(CatalogSourceFitterABC, pydantic.BaseModel):
 
     model_config: ClassVar[pydantic.ConfigDict] = frozen_arbitrary_allowed_config
 
-    def get_model_radec(self, source: Mapping[str, Any], cen_x: float, cen_y: float) -> tuple[float, float]:
-        return float(cen_x), float(cen_y)
-
     def initialize_model(
         self,
         model: g2f.ModelD,
