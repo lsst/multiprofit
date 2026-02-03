@@ -35,10 +35,10 @@ import numpy as np
 import pydantic
 
 from ..componentconfig import Fluxes, GaussianComponentConfig
-from ..errors import NoDataError
+from ..errors import NoDataError, RaDecConversionNotImplementedError
 from ..modelconfig import ModelConfig
 from ..modeller import FitInputsDummy, Modeller
-from ..sourceconfig import SourceConfig, ComponentGroupConfig
+from ..sourceconfig import ComponentGroupConfig, SourceConfig
 from ..utils import frozen_arbitrary_allowed_config, get_params_uniq
 from .fit_catalog import CatalogExposureABC, CatalogFitterConfig, ColumnInfo
 
@@ -110,8 +110,21 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
         " coordinates (e.g. set to -0.5 if the bottom-left corner is -0.5, -0.5)",
         default=0,
     )
+    compute_radec_covariance = pexConfig.Field[bool](
+        doc="Whether to compute the RA/dec covariance. Ignore if convert_cen_xy_to_radec is False.",
+        default=False,
+    )
     config_model = pexConfig.ConfigField[ModelConfig](doc="Source model configuration")
-    convert_cen_xy_to_radec = pexConfig.Field[bool](default=True, doc="Convert cen x/y params to RA/dec")
+    convert_cen_xy_to_radec = pexConfig.Field[bool](
+        doc="Convert pixel x/y centroid params to RA/dec",
+        default=True,
+    )
+    defer_radec_conversion = pexConfig.Field[bool](
+        doc="Whether to defer conversion of pixel x/y centroid params to RA/dec to compute_model_radec_err."
+        " Only effective if convert_cen_xy_to_radec and compute_errors is not NONE, and requires that the"
+        " overloaded compute_model_radec_err method sets RA/dec values itself.",
+        default=False,
+    )
     fit_psmodel_final = pexConfig.Field[bool](
         default=False,
         doc="Fit a point source model after optimization",
@@ -318,6 +331,10 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
                 for key, param in parameters.items()
             ]
         )
+        # Keep track of covariance key by declination parameter indexs
+        # If we want to add RA/dec covariance, it'll need to come after decErr
+        keys_cov = {}
+        compute_errors = self.compute_errors != "NONE"
         if self.convert_cen_xy_to_radec:
             label_cen = self.get_key_cen()
             cen_underscored = label_cen.startswith("_")
@@ -335,12 +352,11 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
             for key, param in parameters.items():
                 # TODO: Update if allowing x, y <-> dec, RA mappings
                 # ... or arbitrary rotations
+                is_y = isinstance(param, g2f.CentroidYParameterD)
                 suffix_radec, suffix_xy = (
                     (suffix_ra, suffix_x)
                     if isinstance(param, g2f.CentroidXParameterD)
-                    else (
-                        (suffix_dec, suffix_y) if isinstance(param, g2f.CentroidYParameterD) else (None, None)
-                    )
+                    else ((suffix_dec, suffix_y) if is_y else (None, None))
                 )
                 if suffix_radec is not None:
                     # Add whatever the corresponding prefix is, and also
@@ -351,12 +367,22 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
                         else (key.split(suffix_xy)[0], suffix_radec)
                     )
                     schema.append(ColumnInfo(key=f"{prefix}{suffix}", dtype="f8", unit=u.deg))
-        if self.compute_errors != "NONE":
+                    if compute_errors and is_y:
+                        suffix_radec = f"{label_cen}{self.get_suffix_ra_dec_cov()}"
+                        prefix, suffix = (
+                            ("", suffix_radec[1:])
+                            if (cen_underscored and (key == suffix_xy[1:]))
+                            else (key.split(suffix_xy)[0], suffix_radec)
+                        )
+                        keys_cov[len(schema) - 1] = f"{prefix}{suffix}"
+        if compute_errors:
             suffix = self.suffix_error
             idx_end = len(schema)
-            # Do not remove idx_end unless you like infinite recursion
-            for column in schema[idx_start:idx_end]:
+            for idx in range(idx_start, idx_end):
+                column = schema[idx]
                 schema.append(ColumnInfo(key=f"{column.key}{suffix}", dtype=column.dtype, unit=column.unit))
+                if (key_cov := keys_cov.get(idx)) is not None:
+                    schema.append(ColumnInfo(key=key_cov, dtype="f8", unit=u.deg**2))
 
         schema.extend(self.schema_configurable())
         return schema
@@ -513,23 +539,30 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         suffix_ra, suffix_dec = config.get_suffix_ra(), config.get_suffix_dec()
 
         for key_base, (param_cen_x, param_cen_y) in params_radec.items():
-            # Avoid C if there's nothing to prefix
-            # or an existing prefix ending in an underscore
-            key_base_cen = config.get_prefixed_label(f"{key_base}{key_cen}", config.prefix_column)
+            # This removes redundant underscores
+            key_base_cen = config.get_prefixed_label(key_cen, key_base)
 
             if param_cen_y is None:
                 raise RuntimeError(
                     f"Fitter failed to find corresponding cen_y param for {key_base=}; is it fixed?"
                 )
+            column_ra = f"{key_base_cen}{suffix_ra}"
+            column_dec = f"{key_base_cen}{suffix_dec}"
+
             columns_params_radec.append(
                 (
-                    f"{key_base_cen}{suffix_ra}",
-                    f"{key_base_cen}{suffix_dec}",
+                    column_ra,
+                    column_dec,
                     f"{key_base_cen}{suffix_x}",
                     f"{key_base_cen}{suffix_y}",
                 )
             )
             if compute_errors:
+                key_cov = (
+                    None
+                    if not config.compute_radec_covariance
+                    else (f"{key_base_cen}{config.get_suffix_ra_dec_cov()}")
+                )
                 columns_params_radec_err.append(
                     (
                         f"{key_base_cen}{suffix_ra}{suffix_err}",
@@ -538,6 +571,9 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                         f"{key_base_cen}{suffix_y}",
                         f"{key_base_cen}{suffix_x}{suffix_err}",
                         f"{key_base_cen}{suffix_y}{suffix_err}",
+                        key_cov,
+                        column_ra,
+                        column_dec,
                     )
                 )
         return columns_params_radec, columns_params_radec_err
@@ -572,6 +608,63 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                 errors_recast[error_type] = error_name
         if errors_bad:
             raise ValueError(f"{self.errors_expected=} keys contain duplicates from {config.flag_errors=}")
+
+    def compute_model_radec_err(
+        self,
+        source_multi: Mapping[str, Any],
+        results,
+        columns_params_radec_err,
+        idx: int,
+        set_radec: bool = False,
+    ) -> None:
+        """Compute right ascension and declination errors for a source.
+
+        This default implementation is naive, assuming only that
+        get_model_radec is implemented, and should be overridden.
+
+        Parameters
+        ----------
+        source_multi
+            A mapping with fields expected to be populated in the
+            corresponding multiband source catalog.
+        results
+            The output catalog to read/write from/to.
+        columns_params_radec_err
+            A list of tuples containing six keys for:
+                ra, dec: RA/Dec inputs.
+                ra_err, dec_err: RA/Dec error outputs.
+                cen_x, cen_y: Pixel x/y centroid inputs.
+                cen_x_err, cen_y_err: Pixel x/y centroid error inputs.
+        idx
+            The integer index of this source in the results catalog.
+        set_radec
+            Whether this method should set RA, dec values instead of reading
+            them (should be True if defer_radec_conversion is True).
+        """
+        for (
+            key_ra_err,
+            key_dec_err,
+            key_cen_x,
+            key_cen_y,
+            key_cen_x_err,
+            key_cen_y_err,
+            key_cen_ra_dec_cov,
+            key_ra,
+            key_dec,
+        ) in columns_params_radec_err:
+            cen_x, cen_y = results[key_cen_x][idx], results[key_cen_y][idx]
+            # TODO: improve this in DM-45682
+            # For one, it won't work right at limits:
+            # RA=359.99... or dec=+89.99...
+            # Could also consider dividing by sqrt(2)
+            # ...but that factor would multiply out later
+            ra_err, dec_err = self.get_model_radec(
+                source_multi,
+                cen_x + results[key_cen_x_err][idx],
+                cen_y + results[key_cen_y_err][idx],
+            )
+            ra, dec = results[key_ra][idx], results[key_dec][idx]
+            results[key_ra_err][idx], results[key_dec_err][idx] = abs(ra_err - ra), abs(dec_err - dec)
 
     def copy_centroid_errors(
         self,
@@ -665,25 +758,6 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         )
 
         model_sources, priors = config_data.sources_priors
-        if config.fit_psmodel_final:
-            channels = config_data.channels
-            sources_psmodel, priors_psmodel = config.make_point_sources(channels, model_sources)
-            params_psmodel = sources_psmodel[0].parameters()
-            cenx_psmodel, ceny_psmodel = None, None
-            fluxes_psmodel = {}
-            idx_band = 0
-            for param in params_psmodel:
-                if isinstance(param, g2f.CentroidXParameterD):
-                    if cenx_psmodel is not None:
-                        raise RuntimeError("Point source model found multiple x centroids")
-                    cenx_psmodel = param
-                elif isinstance(param, g2f.CentroidYParameterD):
-                    if ceny_psmodel is not None:
-                        raise RuntimeError("Point source model found multiple y centroids")
-                    ceny_psmodel = param
-                elif isinstance(param, g2f.IntegralParameterD):
-                    fluxes_psmodel[channels[idx_band]] = param
-                    idx_band += 1
 
         # TODO: If free Observation params are ever supported, make null Data
         # Because config_data knows nothing about the Observation(s)
@@ -750,13 +824,49 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                     )
                     params_cen_y[prefix_cen] = param
 
-        if config.convert_cen_xy_to_radec:
+        if config.convert_cen_xy_to_radec or config.fit_psmodel_final:
             assert params_cen_x.keys() == params_cen_y.keys()
             columns_params_radec, columns_params_radec_err = self._get_columns_params_radec(
                 {k: (x, params_cen_y[k]) for k, x in params_cen_x.items()},
                 compute_errors,
                 config=config,
             )
+
+        fit_psmodel_final = False
+        if config.fit_psmodel_final:
+            # This should never be True until DM-46497 is merged, but models
+            # in other/future derived classes might have multiple centroids
+            if (len(set(params_cen_x.values())) > 1) or (len(set(params_cen_y.values())) > 1):
+                raise ValueError(
+                    f"Got {params_cen_x=} and {params_cen_y} with > 1 unique elements, so "
+                    f"config.fit_psmodel_final may not be set to True"
+                )
+            fit_psmodel_final = True
+
+            key_cen_x_psmodel, key_cen_y_psmodel = columns_params_radec[0][2:4]
+
+            channels = config_data.channels
+            sources_psmodel, priors_psmodel = config.make_point_sources(channels, model_sources)
+            params_psmodel = sources_psmodel[0].parameters()
+            cenx_psmodel, ceny_psmodel = None, None
+            fluxes_psmodel = {}
+            idx_band = 0
+            for param in params_psmodel:
+                if isinstance(param, g2f.CentroidXParameterD):
+                    if cenx_psmodel is not None:
+                        raise RuntimeError("Point source model found multiple x centroids")
+                    cenx_psmodel = param
+                elif isinstance(param, g2f.CentroidYParameterD):
+                    if ceny_psmodel is not None:
+                        raise RuntimeError("Point source model found multiple y centroids")
+                    ceny_psmodel = param
+                elif isinstance(param, g2f.IntegralParameterD):
+                    fluxes_psmodel[channels[idx_band]] = param
+                    idx_band += 1
+
+        convert_cen_xy_to_radec_first = config.convert_cen_xy_to_radec and not (
+            config.compute_errors and config.defer_radec_conversion
+        )
 
         # Setup the results table with correct column names
         n_rows = len(catalog_multi)
@@ -893,15 +1003,15 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                 else:
                     loglike_final = model.evaluate()
 
-                if config.convert_cen_xy_to_radec:
+                if convert_cen_xy_to_radec_first:
                     for key_ra, key_dec, key_cen_x, key_cen_y in columns_params_radec:
                         # These will have been converted back if necessary
                         cen_x, cen_y = results[key_cen_x][idx], results[key_cen_y][idx]
                         radec = self.get_model_radec(source_multi, cen_x, cen_y)
                         results[key_ra][idx], results[key_dec][idx] = radec
 
-                if config.fit_psmodel_final:
-                    cen_x, cen_y = results[key_cen_x][idx], results[key_cen_y][idx]
+                if fit_psmodel_final:
+                    cen_x, cen_y = results[key_cen_x_psmodel][idx], results[key_cen_y_psmodel][idx]
                     cenx_psmodel.value = cen_x
                     ceny_psmodel.value = cen_y
                     model_psf = g2f.ModelD(data=data, psfmodels=psf_models, sources=sources_psmodel)
@@ -910,7 +1020,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                     loglike_psfmodel = model_psf.evaluate()
                     # Reset fluxes for the next fit
                     for param in fluxes_psmodel.values():
-                        param.value = 1.
+                        param.value = 1.0
                     results[f"{prefix}delta_lnL_fit_ps"][idx] = loglike_final[0] - loglike_psfmodel[0]
 
                 if compute_errors:
@@ -1021,29 +1131,13 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
 
                         # Convert the x/y errors to ra/dec errors
                         if config.convert_cen_xy_to_radec:
-                            for (
-                                key_ra_err,
-                                key_dec_err,
-                                key_cen_x,
-                                key_cen_y,
-                                key_cen_x_err,
-                                key_cen_y_err,
-                            ) in columns_params_radec_err:
-                                cen_x, cen_y = results[key_cen_x][idx], results[key_cen_y][idx]
-                                # TODO: improve this in DM-45682
-                                # For one, it won't work right at limits:
-                                # RA=359.99... or dec=+89.99...
-                                # Could also consider dividing by sqrt(2)
-                                # ...but that factor would multiply out later
-                                radec_err = np.array(
-                                    self.get_model_radec(
-                                        source_multi,
-                                        cen_x + results[key_cen_x_err][idx],
-                                        cen_y + results[key_cen_y_err][idx],
-                                    )
-                                )
-                                radec_err -= radec
-                                results[key_ra_err][idx], results[key_dec_err][idx] = np.abs(radec_err)
+                            self.compute_model_radec_err(
+                                source_multi,
+                                results,
+                                columns_params_radec_err,
+                                idx,
+                                set_radec=not convert_cen_xy_to_radec_first,
+                            )
 
                 results[f"{prefix}chisq_reduced"][idx] = result_full.chisq_best / size
                 time_final = time.process_time()
@@ -1190,7 +1284,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         ra, dec
             The right ascension and declination.
         """
-        return np.nan, np.nan
+        raise RaDecConversionNotImplementedError("get_model_radec has no default implementation")
 
     @abstractmethod
     def initialize_model(
