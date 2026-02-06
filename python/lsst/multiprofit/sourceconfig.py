@@ -35,6 +35,7 @@ from .componentconfig import (
     EllipticalComponentConfig,
     Fluxes,
     GaussianComponentConfig,
+    MultiChannelCentroidConfig,
     SersicComponentConfig,
 )
 
@@ -44,7 +45,7 @@ ComponentConfigs = dict[str, EllipticalComponentConfig]
 class ComponentGroupConfig(pexConfig.Config):
     """Configuration for a group of lsst.gauss2d.fit Components.
 
-    ComponentGroups may have linked CentroidParameters
+    ComponentGroups may have linked MultiChannelCentroids
     and IntegralModels, e.g. if is_fractional is True.
 
     Notes
@@ -64,6 +65,11 @@ class ComponentGroupConfig(pexConfig.Config):
         doc="Centroids by key, which can be a component name or 'default'."
         "The 'default' key-value pair must be specified if it is needed.",
         default={"default": CentroidConfig},
+    )
+    centroids_chromatic = pexConfig.ConfigDictField[str, MultiChannelCentroidConfig](
+        doc="Centroids by key, which can be a component name or 'default'."
+        "The 'default' key-value pair must be specified if it is needed.",
+        default={},
     )
     # TODO: Change this to just one EllipticalComponentConfig field
     # when pex_config supports derived types in ConfigDictField
@@ -224,11 +230,14 @@ class ComponentGroupConfig(pexConfig.Config):
                     label_integral=label_integral_comp,
                 )
 
-            centroid = self.centroids.get(name_component)
-            if not centroid:
-                if centroid_default is None:
-                    centroid_default = self.centroids["default"].make_centroid()
-                centroid = centroid_default
+            centroid = self.centroids_chromatic.get(name_component)
+            if centroid is None:
+                centroid = self.centroids.get(name_component)
+                if not centroid:
+                    if centroid_default is None:
+                        centroid_default = self.centroids["default"].make_centroid()
+                    centroid = centroid_default
+                centroid = g2f.AchromaticCentroid(centroid)
             componentdata = config_comp.make_component(
                 centroid=centroid,
                 integral_model=integral_model,
