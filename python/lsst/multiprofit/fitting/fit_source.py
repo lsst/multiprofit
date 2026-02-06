@@ -463,8 +463,39 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
                         # Avoid double-underscoring if there's nothing to
                         # prefix or an existing prefix
                         key_cen = config.get_prefixed_label(label_cen, prefix_cen)
-                        parameters[f"{key_cen}{label_x}"] = component.centroid.x_param
-                        parameters[f"{key_cen}{label_y}"] = component.centroid.y_param
+                        centroid = component.centroid
+                        if (config_cen := config_group.centroids_chromatic.get(name_comp)) is None:
+                            centroid_prefixes = (
+                                {f"{channel.name}_": channel for channel in centroid.channels}
+                                if (len(centroid.channels) > 0)
+                                else {"": g2f.Channel.NONE}
+                            )
+                        else:
+                            channel_names = tuple(channel.name for channel in centroid.channels)
+                            centroid_prefixes = {
+                                # It doesn't matter which channel we pick as
+                                # long as it's actually available in centroid
+                                config_cen.format_prefix.format(group=key_group): g2f.Channel.get(
+                                    next(
+                                        iter(
+                                            channel
+                                            for channel in config_cen_group.channels
+                                            if (channel in channel_names)
+                                        )
+                                    )
+                                )
+                                for key_group, config_cen_group in config_cen.groups.items()
+                            }
+                        for prefix_channel, channel in centroid_prefixes.items():
+                            key_cen_channel = (
+                                config.get_prefixed_label(key_cen, prefix_channel)
+                                if prefix_channel
+                                else key_cen
+                            )
+                            centroid_channel = centroid[channel]
+
+                            parameters[f"{key_cen_channel}{label_x}"] = centroid_channel.x_param
+                            parameters[f"{key_cen_channel}{label_y}"] = centroid_channel.y_param
                     if not config_comp.size_x.fixed:
                         parameters[f"{key_size}{label_x}"] = component.ellipse.size_x_param
                     if not config_comp.size_y.fixed:

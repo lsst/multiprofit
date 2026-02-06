@@ -21,13 +21,17 @@
 
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit.componentconfig import (
+    CentroidConfig,
+    ChannelGroupCentroidConfig,
     EllipticalComponentConfig,
     GaussianComponentConfig,
+    MultiChannelCentroidConfig,
     ParameterConfig,
     SersicComponentConfig,
     SersicIndexParameterConfig,
 )
 from lsst.multiprofit.utils import get_params_uniq, set_config_from_dict
+import lsst.pex.config as pexConfig
 import numpy as np
 import pytest
 
@@ -49,6 +53,50 @@ def centroid(centroid_limits):
 @pytest.fixture(scope="module")
 def channels():
     return {band: g2f.Channel.get(band) for band in ("R", "G", "B")}
+
+
+def test_ChannelGroupCentroidConfig():
+    config = ChannelGroupCentroidConfig(achromatic=True)
+    config_cen = MultiChannelCentroidConfig()
+    with pytest.raises(pexConfig.FieldValidationError):
+        config.validate()
+    config_cen.x.value_initial = 1
+    config_cen.y.value_initial = -1
+    config_cen.channels = ["a", "b"]
+    config_cen.validate()
+
+    config.groups = {"a": config_cen, "b": config_cen}
+    # achromatic can't have >1 group
+    with pytest.raises(ValueError):
+        config.validate()
+    config.groups = {"ab": config_cen}
+    config.validate()
+    centroid = config.make_centroid()
+    assert isinstance(centroid, g2f.AchromaticCentroid)
+    # test wrong key raises
+    # arguably it should raise KeyError, but it is really an ArgumentError
+    with pytest.raises(ValueError):
+        config.make_centroid({"a": ("a",)})
+    centroid_channeled = config.make_centroid({"ab": ("a",)})
+    for achrom in (centroid, centroid_channeled):
+        params = achrom[g2f.Channel.get("c")]
+        assert params.x == config_cen.x.value_initial
+        assert params.y == config_cen.y.value_initial
+
+    centroid_channeled = config.make_centroid()
+    assert len(centroid_channeled) == 0
+
+    config.achromatic = False
+    config.validate()
+    with pytest.raises(ValueError):
+        config.make_centroid({"ab": "c"})
+    chrom = config.make_centroid({"ab": ("b",)})
+    assert isinstance(chrom, g2f.ChromaticCentroid)
+    with pytest.raises(IndexError):
+        chrom[g2f.Channel.get("a")]
+    params = chrom[g2f.Channel.get("b")]
+    assert params.x == config_cen.x.value_initial
+    assert params.y == config_cen.y.value_initial
 
 
 def test_EllipticalComponentConfig():
@@ -84,7 +132,7 @@ def test_GaussianComponentConfig(centroid):
     n_components = len(components)
     for idx, component_data in enumerate(components):
         component = component_data.component
-        assert component.centroid is centroid
+        assert component.centroid[g2f.Channel.NONE] is centroid
         assert len(component_data.priors) == 0
         fluxes = list(get_params_uniq(component, nonlinear=False))
         assert len(fluxes) == 1

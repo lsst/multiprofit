@@ -32,6 +32,7 @@ import lsst.pex.config as pexConfig
 
 from .componentconfig import (
     CentroidConfig,
+    ChannelGroupCentroidConfig,
     EllipticalComponentConfig,
     Fluxes,
     GaussianComponentConfig,
@@ -44,7 +45,7 @@ ComponentConfigs = dict[str, EllipticalComponentConfig]
 class ComponentGroupConfig(pexConfig.Config):
     """Configuration for a group of lsst.gauss2d.fit Components.
 
-    ComponentGroups may have linked CentroidParameters
+    ComponentGroups may have linked MultiChannelCentroids
     and IntegralModels, e.g. if is_fractional is True.
 
     Notes
@@ -64,6 +65,11 @@ class ComponentGroupConfig(pexConfig.Config):
         doc="Centroids by key, which can be a component name or 'default'."
         "The 'default' key-value pair must be specified if it is needed.",
         default={"default": CentroidConfig},
+    )
+    centroids_chromatic = pexConfig.ConfigDictField[str, ChannelGroupCentroidConfig](
+        doc="Centroids by key, which can be a component name or 'default'."
+        "The 'default' key-value pair must be specified if it is needed.",
+        default={},
     )
     # TODO: Change this to just one EllipticalComponentConfig field
     # when pex_config supports derived types in ConfigDictField
@@ -169,6 +175,7 @@ class ComponentGroupConfig(pexConfig.Config):
         component_configs = self.get_component_configs()
         fluxes_first = component_fluxes[0]
         channels = fluxes_first.keys()
+        channel_names = tuple(channel.name for channel in channels)
         fluxes_all = (component_fluxes[1:] + [None]) if self.is_fractional else component_fluxes
         if len(fluxes_all) != len(component_configs):
             raise ValueError(f"{len(fluxes_all)=} != {len(component_configs)=}")
@@ -224,11 +231,22 @@ class ComponentGroupConfig(pexConfig.Config):
                     label_integral=label_integral_comp,
                 )
 
-            centroid = self.centroids.get(name_component)
-            if not centroid:
-                if centroid_default is None:
-                    centroid_default = self.centroids["default"].make_centroid()
-                centroid = centroid_default
+            centroid_config = self.centroids_chromatic.get(name_component)
+            if centroid_config is None:
+                centroid_config = self.centroids.get(name_component)
+                if centroid_config is None:
+                    if centroid_default is None:
+                        centroid_default = self.centroids["default"].make_centroid()
+                    centroid = centroid_default
+                else:
+                    centroid = centroid_config.make_centroid()
+                centroid = g2f.AchromaticCentroid(centroid)
+            else:
+                channel_groups = {
+                    group: tuple(channel for channel in config_group.channels if channel in channel_names)
+                    for group, config_group in centroid_config.groups.items()
+                }
+                centroid = centroid_config.make_centroid(channel_groups)
             componentdata = config_comp.make_component(
                 centroid=centroid,
                 integral_model=integral_model,
@@ -250,6 +268,13 @@ class ComponentGroupConfig(pexConfig.Config):
             components[name] = component
 
         keys = set(self.centroids.keys())
+        keys_multi = set(self.centroids_chromatic.keys())
+        intersect = keys.intersection(keys_multi)
+        if intersect:
+            errors.append(
+                f"{intersect} found in centroid.keys={keys} and centroids_chromatic.keys={keys_multi}"
+            )
+        keys |= keys_multi
         has_default = "default" in keys
         for name in components.keys():
             if name in keys:
