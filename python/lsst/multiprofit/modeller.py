@@ -1256,9 +1256,13 @@ class Modeller:
                     g2f.SigmaYParameterD(gaussian.ellipse.sigma_y, fixed=True),
                     g2f.RhoParameterD(gaussian.ellipse.rho, fixed=True),
                 ),
-                g2f.CentroidParameters(
-                    g2f.CentroidXParameterD(gaussian.centroid.x, fixed=True),
-                    g2f.CentroidYParameterD(gaussian.centroid.y, fixed=True),
+                g2f.ChromaticCentroid(
+                    {
+                        g2f.Channel.NONE: g2f.CentroidParameters(
+                            g2f.CentroidXParameterD(gaussian.centroid.x, fixed=True),
+                            g2f.CentroidYParameterD(gaussian.centroid.y, fixed=True),
+                        ),
+                    }
                 ),
                 g2f.LinearIntegralModel(
                     [

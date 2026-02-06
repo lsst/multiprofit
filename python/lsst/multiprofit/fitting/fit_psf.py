@@ -280,8 +280,18 @@ class CatalogPsfFitterConfigData(pydantic.BaseModel):
                     # Avoid redundant -underscores if there's nothing to prefix
                     # or an existing prefix starting with an underscore
                     key_cen = config.get_prefixed_label(label_cen, prefix_cen)
-                    parameters[f"{key_cen}{suffix_x}"] = component.centroid.x_param
-                    parameters[f"{key_cen}{suffix_y}"] = component.centroid.y_param
+                    channels = component.centroid.channels
+                    n_channels = len(channels)
+                    if n_channels > 1:
+                        # TODO: This should be checked in config validation
+                        raise RuntimeError(
+                            f"{component=}.centroid has channels={channels} but PSF fits cannot"
+                            f" have multiple channels"
+                        )
+                    centroid = component.centroid[channels[0] if (n_channels == 1) else g2f.Channel.NONE]
+
+                    parameters[f"{key_cen}{suffix_x}"] = centroid.x_param
+                    parameters[f"{key_cen}{suffix_y}"] = centroid.y_param
                 # Add each free shape parameter
                 if not config_comp.size_x.fixed:
                     parameters[f"{key_size}{suffix_x}"] = component.ellipse.size_x_param
@@ -725,6 +735,7 @@ class CatalogPsfFitter:
             config_data.components.values(), config_data.component_configs.values()
         ):
             centroid = component.centroid
+            centroid = centroid[centroid.channels[0] if centroid.channels else g2f.Channel.NONE]
             if centroid not in centroids:
                 centroid.x_param.value = cen_x
                 centroid.x_param.limits = limits_x

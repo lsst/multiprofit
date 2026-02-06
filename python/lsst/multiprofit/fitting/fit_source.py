@@ -463,8 +463,21 @@ class CatalogSourceFitterConfigData(pydantic.BaseModel):
                         # Avoid double-underscoring if there's nothing to
                         # prefix or an existing prefix
                         key_cen = config.get_prefixed_label(label_cen, prefix_cen)
-                        parameters[f"{key_cen}{label_x}"] = component.centroid.x_param
-                        parameters[f"{key_cen}{label_y}"] = component.centroid.y_param
+                        centroid = component.centroid
+                        channels_cen = (
+                            {channel.name: channel for channel in centroid.channels}
+                            if (len(centroid.channels) > 0)
+                            else {"": g2f.Channel.NONE}
+                        )
+                        for prefix_channel, channel in channels_cen.items():
+                            key_cen_channel = (
+                                config.get_prefixed_label(key_cen, prefix_channel)
+                                if prefix_channel
+                                else key_cen
+                            )
+                            centroid_channel = centroid[channel]
+                            parameters[f"{key_cen_channel}{label_x}"] = centroid_channel.x_param
+                            parameters[f"{key_cen_channel}{label_y}"] = centroid_channel.y_param
                     if not config_comp.size_x.fixed:
                         parameters[f"{key_size}{label_x}"] = component.ellipse.size_x_param
                     if not config_comp.size_y.fixed:

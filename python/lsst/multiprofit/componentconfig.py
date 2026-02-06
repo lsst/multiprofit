@@ -24,6 +24,7 @@ __all__ = [
     "FluxFractionParameterConfig",
     "FluxParameterConfig",
     "CentroidConfig",
+    "MultiChannelCentroidConfig",
     "ComponentData",
     "Fluxes",
     "EllipticalComponentConfig",
@@ -79,7 +80,7 @@ class FluxFractionParameterConfig(ParameterConfig):
 
 
 class CentroidConfig(pexConfig.Config):
-    """Configuration for a component centroid."""
+    """Configuration for single-channel component centroid parameters."""
 
     x = pexConfig.ConfigField[ParameterConfig](doc="The x-axis centroid configuration")
     y = pexConfig.ConfigField[ParameterConfig](doc="The y-axis centroid configuration")
@@ -91,6 +92,84 @@ class CentroidConfig(pexConfig.Config):
         )
         centroid = g2f.CentroidParameters(x=cen_x, y=cen_y)
         return centroid
+
+
+class MultiChannelCentroidConfig(pexConfig.Config):
+    """Configuration for a chromatic component centroid.
+
+    Source configurations must use this class, as it can generate an
+    AchromaticCentroid if needed.
+    """
+
+    achromatic = pexConfig.Field[bool](
+        doc="Whether to make the centroid achromatic. Cannot be True if centroids" " has multiple items.",
+        default=False,
+    )
+    centroids = pexConfig.ConfigDictField[str, CentroidConfig](
+        doc="Centroid configurations for each channel group",
+        default={},
+        keyCheck=lambda x: len(x) > 0,
+    )
+    separator = pexConfig.Field[str](
+        doc="String to split centroids keys into channel names",
+        default=",",
+        check=lambda x: len(x) > 0,
+    )
+
+    def make_centroid(self, channel_groups: dict[str, str] | None = None) -> g2f.MultiChannelCentroid:
+        """Make a ChromaticCentroid reflecting the current configuration.
+
+        Parameters
+        ----------
+        channel_groups
+            A dict of channel groups to create keyed by configured channel
+            groups. Values must be subsets of keys.
+
+        Returns
+        -------
+        centroid
+            A MultiChannelCentroid initialized as configured.
+        """
+        if not self.centroids:
+            raise ValueError("Can't make an empty MultiChannelCentroid")
+        subset = channel_groups is not None
+        keys_config = tuple(self.centroids.keys())
+        if subset:
+            keys_out = tuple(channel_groups.keys())
+            if not set(keys_out).issubset(set(keys_config)):
+                raise ValueError(
+                    f"channel_groups.keys()={keys_out} is not a subset of self.centroids.keys()={keys_config}"
+                )
+        else:
+            channel_groups = {key: key for key in self.centroids.keys()}
+        if self.achromatic and (len(channel_groups) > 1):
+            raise RuntimeError(f"{channel_groups=} cannot have len > 1 with {self.achromatic=}")
+        data = {}
+        for idx, (key_in, key_out) in enumerate(channel_groups.items()):
+            channels_out = key_out.split(self.separator)
+            centroid = self.centroids[key_in].make_centroid()
+            if self.achromatic:
+                if len(channels_out) > 1:
+                    raise RuntimeError(
+                        f"{key_in} with {channels_out=} cannot have len > 1 with {self.achromatic=}"
+                    )
+                return g2f.AchromaticCentroid(centroid)
+            if subset and not set(channels_out).issubset(channels_in := (set(key_in.split(self.separator)))):
+                raise ValueError(
+                    f"{key_out=} (self.centroids.keys()[{idx}]) split to {channels_in} with {self.separator=}"
+                    f" which is not a subset of {key_out=} which splits to {channels_out}"
+                )
+            for channel_name in channels_out:
+                data[g2f.Channel.get(channel_name)] = centroid
+        return g2f.ChromaticCentroid(data)
+
+    def validate(self):
+        super().validate()
+        if self.achromatic:
+            if len(self.centroids) > 1:
+                raise ValueError(f"Cannot make achromatic centroid with {self.centroids=} of len > 1")
+            elif len(channels := next(iter(self.centroids.keys())).split(self.separator)) > 1:
+                raise ValueError(f"Cannot make achromatic centroid with {channels=} of len > 1")
 
 
 class ComponentData(pydantic.BaseModel):
@@ -196,7 +275,7 @@ class EllipticalComponentConfig(ShapePriorConfig):
     @abstractmethod
     def make_component(
         self,
-        centroid: g2f.CentroidParameters,
+        centroid: g2f.CentroidParameters | g2f.MultiChannelCentroid,
         integral_model: g2f.IntegralModel,
     ) -> ComponentData:
         """Make a Component reflecting the current configuration.
@@ -204,7 +283,8 @@ class EllipticalComponentConfig(ShapePriorConfig):
         Parameters
         ----------
         centroid
-            Centroid parameters for the component.
+            The centroid for the component. If a CentroidParameters, it will
+            be converted into a `gauss2d.fit.AchromaticCentroid`.
         integral_model
             The integral_model for this component.
 
@@ -361,6 +441,14 @@ class EllipticalComponentConfig(ShapePriorConfig):
         """
         component.ellipse.rho = rho
 
+    @staticmethod
+    def _convert_centroid(
+        centroid: g2f.CentroidParameters | g2f.MultiChannelCentroid,
+    ) -> g2f.MultiChannelCentroid:
+        if isinstance(centroid, g2f.CentroidParameters):
+            return g2f.AchromaticCentroid(centroid)
+        return centroid
+
 
 class GaussianComponentConfig(EllipticalComponentConfig):
     """Configuration for an lsst.gauss2d.fit Gaussian component."""
@@ -381,14 +469,14 @@ class GaussianComponentConfig(EllipticalComponentConfig):
 
     def make_component(
         self,
-        centroid: g2f.CentroidParameters,
+        centroid: g2f.CentroidParameters | g2f.MultiChannelCentroid,
         integral_model: g2f.IntegralModel,
     ) -> ComponentData:
         ellipse = self.make_gaussianparametricellipse()
         prior = self.make_shape_prior(ellipse)
         component_data = ComponentData(
             component=g2f.GaussianComponent(
-                centroid=centroid,
+                centroid=self._convert_centroid(centroid),
                 ellipse=ellipse,
                 integral=integral_model,
             ),
@@ -511,12 +599,13 @@ class SersicComponentConfig(EllipticalComponentConfig):
 
     def make_component(
         self,
-        centroid: g2f.CentroidParameters,
+        centroid: g2f.CentroidParameters | g2f.MultiChannelCentroid,
         integral_model: g2f.IntegralModel,
     ) -> ComponentData:
         is_gaussian_fixed = self.is_gaussian_fixed()
         transform_size = self.get_transform_size()
         transform_rho = self.get_transform_rho()
+        centroid = self._convert_centroid(centroid)
         if is_gaussian_fixed:
             ellipse = self.make_gaussianparametricellipse()
             component = g2f.GaussianComponent(

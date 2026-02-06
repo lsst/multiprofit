@@ -21,8 +21,10 @@
 
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit.componentconfig import (
+    CentroidConfig,
     EllipticalComponentConfig,
     GaussianComponentConfig,
+    MultiChannelCentroidConfig,
     ParameterConfig,
     SersicComponentConfig,
     SersicIndexParameterConfig,
@@ -49,6 +51,43 @@ def centroid(centroid_limits):
 @pytest.fixture(scope="module")
 def channels():
     return {band: g2f.Channel.get(band) for band in ("R", "G", "B")}
+
+
+def test_MultiChannelCentroidConfig():
+    config = MultiChannelCentroidConfig(achromatic=True)
+    config_cen = CentroidConfig()
+    config_cen.x.value_initial = 1
+    config_cen.y.value_initial = -1
+    config.centroids = {"a": config_cen, "b": config_cen}
+    with pytest.raises(ValueError):
+        config.validate()
+    config.centroids = {"a,b": config_cen}
+    with pytest.raises(ValueError):
+        config.validate()
+    config.centroids = {"a": config_cen}
+    centroid = config.make_centroid()
+    assert isinstance(centroid, g2f.AchromaticCentroid)
+    centroid_channeled = config.make_centroid({"a": "a"})
+    for achrom in (centroid, centroid_channeled):
+        params = achrom[g2f.Channel.get("c")]
+        assert params.x == config_cen.x.value_initial
+        assert params.y == config_cen.y.value_initial
+
+    config.separator = "|"
+    config.centroids = {"a|b": config_cen}
+    with pytest.raises(ValueError):
+        config.validate()
+    config.achromatic = False
+    config.validate()
+    with pytest.raises(ValueError):
+        config.make_centroid({"a|b": "c"})
+    chrom = config.make_centroid({"a|b": "a"})
+    assert isinstance(chrom, g2f.ChromaticCentroid)
+    with pytest.raises(IndexError):
+        chrom[g2f.Channel.get("b")]
+    params = chrom[g2f.Channel.get("a")]
+    assert params.x == config_cen.x.value_initial
+    assert params.y == config_cen.y.value_initial
 
 
 def test_EllipticalComponentConfig():
@@ -84,7 +123,7 @@ def test_GaussianComponentConfig(centroid):
     n_components = len(components)
     for idx, component_data in enumerate(components):
         component = component_data.component
-        assert component.centroid is centroid
+        assert component.centroid[g2f.Channel.NONE] is centroid
         assert len(component_data.priors) == 0
         fluxes = list(get_params_uniq(component, nonlinear=False))
         assert len(fluxes) == 1
