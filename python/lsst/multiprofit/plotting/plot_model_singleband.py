@@ -62,20 +62,20 @@ def plot_model_singleband(
     img_model = model.outputs[idx_obs].data
 
     value_max = np.nanpercentile(img_model, percentile_scaling)
-    offset = 1/np.nanmedian(obs.sigma_inv.data)
+    offset = 1 / np.nanmedian(obs.sigma_inv.data)
 
     fig, ax = plt.subplots(nrows=2, ncols=2)
 
-    ax[0][0].imshow(np.arcsinh((img_data + offset)/value_max) , cmap="gray", origin="lower")
+    ax[0][0].imshow(np.arcsinh((img_data + offset) / value_max), cmap="gray", origin="lower")
     ax[0][0].tick_params(labelleft=False)
     ax[0][0].set_title(f"{band}-band Image")
-    ax[0][1].imshow(np.arcsinh((img_model + offset)/value_max) , cmap="gray", origin="lower")
+    ax[0][1].imshow(np.arcsinh((img_model + offset) / value_max), cmap="gray", origin="lower")
     ax[0][1].tick_params(labelleft=False)
     ax[0][1].set_title(f"{band}-band Model")
-    ax[1][0].imshow(np.arcsinh((img_data - img_model)/value_max) , cmap="gray", origin="lower")
+    ax[1][0].imshow(np.arcsinh((img_data - img_model) / value_max), cmap="gray", origin="lower")
     ax[1][0].tick_params(labelleft=False)
     ax[1][0].set_title(f"{band}-band Residual")
-    ax[1][1].imshow((img_data - img_model)*obs.sigma_inv.data, cmap="gray", origin="lower")
+    ax[1][1].imshow((img_data - img_model) * obs.sigma_inv.data, cmap="gray", origin="lower")
     ax[1][1].tick_params(labelleft=False)
     ax[1][1].set_title(f"{band}-band Residual")
 

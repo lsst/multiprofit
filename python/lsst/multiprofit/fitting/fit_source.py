@@ -107,7 +107,7 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
 
     apply_centroid_pixel_offset = pexConfig.Field[bool](
         doc="Whether to apply the centroid pixel offset to all centroid pixel columns. Should be False if "
-            "fitting in sky or other non-pixel coordinates",
+        "fitting in sky or other non-pixel coordinates",
         default=True,
     )
     centroid_pixel_offset = pexConfig.Field[float](
