@@ -21,7 +21,11 @@
 
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit import (
-    ComponentGroupConfig, GaussianComponentConfig, ModelConfig, ModelFitConfig, SourceConfig,
+    ComponentGroupConfig,
+    GaussianComponentConfig,
+    ModelConfig,
+    ModelFitConfig,
+    SourceConfig,
 )
 from lsst.multiprofit.fitting.fit_source import CatalogSourceFitterConfig, CatalogSourceFitterConfigData
 from lsst.multiprofit.utils import get_params_uniq
@@ -43,11 +47,7 @@ def fitter_config() -> CatalogSourceFitterConfig:
                 "": SourceConfig(
                     component_groups={
                         "": ComponentGroupConfig(
-                            components_gauss=(
-                                {
-                                    "gauss": GaussianComponentConfig()
-                                }
-                            ),
+                            components_gauss=({"gauss": GaussianComponentConfig()}),
                         )
                     }
                 ),
