@@ -417,7 +417,7 @@ class FitResult(pydantic.BaseModel):
     params_free_missing: tuple[g2f.ParameterD, ...] | None = pydantic.Field(
         None,
         title="Free parameters that were fixed during fitting - usually an"
-              " IntegralParameterD for a band with missing data",
+        " IntegralParameterD for a band with missing data",
     )
     n_eval_resid: int = pydantic.Field(0, title="Total number of self-reported residual function evaluations")
     n_eval_func: int = pydantic.Field(
@@ -499,9 +499,10 @@ def residual_scipy(
 
     Returns
     -------
-    The log-likehood if return_loglike, otherwise the negative of the
-    residual from result.inputs.residual. kwargs are for the convenience of
-    libraries other than scipy and will not be changed by scipy itself.
+    values
+        The log-likehood if return_loglike, otherwise the negative of the
+        residual from result.inputs.residual. kwargs are for the convenience
+        of libraries other than scipy and will not be changed by scipy itself.
 
     Notes
     -----
@@ -521,7 +522,6 @@ def residual_scipy(
     else:
         There is always one call to model_loglike.evaluate,
         and MAYBE one call to model_jacobian.evaluate.
-
     """
     set_params(params, params_new, model_loglike)
     config_fit = result.config
@@ -574,7 +574,8 @@ def jacobian_scipy(
 
     Returns
     -------
-    A reference to jacobian, whose values may have been updated.
+    jacobian
+        A reference to jacobian, whose values may have been updated.
 
     Notes
     -----
@@ -599,6 +600,7 @@ def jacobian_scipy(
 
 
 if has_pygmo:
+
     class PygmoUDP:
         """A Pygmo User-Defined Problem for a MultiProFit model.
 
@@ -659,7 +661,9 @@ if has_pygmo:
                 never_evaluate_jacobian=True,
                 return_loglike=True,
             )
-            return [-sum(loglike),]
+            return [
+                -sum(loglike),
+            ]
 
         def get_bounds(self):
             return self.bounds_lower, self.bounds_upper
@@ -682,12 +686,15 @@ if has_pygmo:
             because Model instances cannot be deep copied.
             """
             fitinputs = FitInputs.from_model(self.model_loglike)
-            model_loglike, model_loglike_grad = (g2f.ModelD(
-                data=model.data,
-                psfmodels=model.psfmodels,
-                sources=model.sources,
-                priors=model.priors,
-            ) for model in (self.model_loglike, self.model_loglike_grad))
+            model_loglike, model_loglike_grad = (
+                g2f.ModelD(
+                    data=model.data,
+                    psfmodels=model.psfmodels,
+                    sources=model.sources,
+                    priors=model.priors,
+                )
+                for model in (self.model_loglike, self.model_loglike_grad)
+            )
             model_loglike.setup_evaluators(evaluatormode=g2f.EvaluatorMode.loglike)
             model_loglike_grad.setup_evaluators(evaluatormode=g2f.EvaluatorMode.loglike_grad)
 
@@ -904,12 +911,16 @@ class Modeller:
         config.validate()
 
         use_pygmo = config.optimization_library == "pygmo"
-        model_loglike = g2f.ModelD(
-            data=model.data,
-            psfmodels=model.psfmodels,
-            sources=model.sources,
-            priors=model.priors,
-        ) if (use_pygmo or config.eval_residual) else None
+        model_loglike = (
+            g2f.ModelD(
+                data=model.data,
+                psfmodels=model.psfmodels,
+                sources=model.sources,
+                priors=model.priors,
+            )
+            if (use_pygmo or config.eval_residual)
+            else None
+        )
 
         if use_pygmo:
             model.setup_evaluators(g2f.EvaluatorMode.loglike_grad, force=True)
@@ -1040,9 +1051,9 @@ class Modeller:
                     bound_lower = bounds_lower[idx]
                     bound_upper = bounds_upper[idx]
                     if value_init >= bound_upper:
-                        params_init[idx] = bound_lower + 0.99*(bound_upper - bound_lower)
+                        params_init[idx] = bound_lower + 0.99 * (bound_upper - bound_lower)
                     elif value_init <= bound_lower:
-                        params_init[idx] = bound_lower + 0.01*(bound_upper - bound_lower)
+                        params_init[idx] = bound_lower + 0.01 * (bound_upper - bound_lower)
 
                 problem = pg.problem(udp)
                 pop = pg.population(prob=problem, size=0)
@@ -1051,7 +1062,7 @@ class Modeller:
                 x_best = result_opt.champion_x
                 results.n_eval_func = pop.problem.get_fevals()
                 results.n_eval_jac = pop.problem.get_gevals()
-                results.chisq_best = 2*result_opt.champion_f
+                results.chisq_best = 2 * result_opt.champion_f
             else:
                 # The initial evaluate will fill in jac for the next line
                 # _ll_init is assigned just for convenient debugging
@@ -1069,7 +1080,7 @@ class Modeller:
                 x_best = result_opt.x
                 results.n_eval_func = result_opt.nfev
                 results.n_eval_jac = result_opt.njev if result_opt.njev else 0
-                results.chisq_best = 2*result_opt.cost
+                results.chisq_best = 2 * result_opt.cost
 
             results.time_run = time.process_time() - time_init
             results.result = result_opt
@@ -1084,9 +1095,7 @@ class Modeller:
                 results.params_best = tuple(params_best)
                 results.params = params_free_sorted_all
             else:
-                results.params_best = tuple(
-                    x_best[offsets_params[param] - 1] for param in params_free_sorted
-                )
+                results.params_best = tuple(x_best[offsets_params[param] - 1] for param in params_free_sorted)
                 results.params = params_free_sorted
             results.params_free_missing = tuple(params_free_sorted_missing)
         except Exception as e:
@@ -1256,13 +1265,11 @@ class Modeller:
                     g2f.SigmaYParameterD(gaussian.ellipse.sigma_y, fixed=True),
                     g2f.RhoParameterD(gaussian.ellipse.rho, fixed=True),
                 ),
-                g2f.ChromaticCentroid(
-                    {
-                        g2f.Channel.NONE: g2f.CentroidParameters(
-                            g2f.CentroidXParameterD(gaussian.centroid.x, fixed=True),
-                            g2f.CentroidYParameterD(gaussian.centroid.y, fixed=True),
-                        ),
-                    }
+                g2f.AchromaticCentroid(
+                    g2f.CentroidParameters(
+                        g2f.CentroidXParameterD(gaussian.centroid.x, fixed=True),
+                        g2f.CentroidYParameterD(gaussian.centroid.y, fixed=True),
+                    )
                 ),
                 g2f.LinearIntegralModel(
                     [
