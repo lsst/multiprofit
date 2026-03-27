@@ -880,6 +880,7 @@ class Modeller:
         fitinputs: FitInputs | None = None,
         printout: bool = False,
         config: ModelFitConfig | None = None,
+        param_scale_factors: dict[g2f.ParameterD, float] | None = None,
         **kwargs: Any,
     ) -> FitResult:
         """Fit a model with a nonlinear optimizer.
@@ -894,6 +895,10 @@ class Modeller:
             Whether to print diagnostic information.
         config
             Configuration settings for model fitting.
+        param_scale_factors
+            Dictionary of factors to multiply the Jacobian-derived parameter
+            scale factors by. Values smaller than 1 should result in larger
+            value shifts in proposals.
         **kwargs
             Keyword arguments to pass to the optimizer.
 
@@ -908,6 +913,8 @@ class Modeller:
         """
         if config is None:
             config = ModelFitConfig()
+        if param_scale_factors is None:
+            param_scale_factors = {}
         config.validate()
 
         use_pygmo = config.optimization_library == "pygmo"
@@ -1003,6 +1010,7 @@ class Modeller:
             n_params_free = len(params_free)
             bounds = ([None] * n_params_free, [None] * n_params_free)
             params_init = [None] * n_params_free
+            param_x_scale_factors = np.empty(n_params_free, dtype=np.float64)
 
             for idx, param in enumerate(params_free):
                 limits = param.limits
@@ -1022,6 +1030,7 @@ class Modeller:
                 if not limits.check(param.value):
                     raise RuntimeError(f"{param=}.value_transformed={param.value} not within {limits=}")
                 params_init[idx] = param.value_transformed
+                param_x_scale_factors[idx] = param_scale_factors.get(param, 1.0)
 
             results = FitResult(inputs=fitinputs, config=config)
             time_init = time.process_time()
@@ -1067,7 +1076,9 @@ class Modeller:
                 # The initial evaluate will fill in jac for the next line
                 # _ll_init is assigned just for convenient debugging
                 _ll_init = model.evaluate(print=printout)  # noqa: F841
-                x_scale_jac_clipped = np.clip(1.0 / (np.sum(jac**2, axis=0) ** 0.5), 1e-5, 1e19)
+                x_scale_jac_clipped = np.clip(
+                    param_x_scale_factors / (np.sum(jac**2, axis=0) ** 0.5), 1e-5, 1e19
+                )
                 result_opt = spopt.least_squares(
                     residual_scipy,
                     params_init,
