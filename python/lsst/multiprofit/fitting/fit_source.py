@@ -1216,6 +1216,13 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                 results[f"{prefix}chisq_reduced"][idx] = result_full.chisq_best / size
                 time_final = time.process_time()
                 results[f"{prefix}time_full"][idx] = time_final - time_init
+                self.post_fit(
+                    idx=idx,
+                    model=model,
+                    results=results[idx],
+                    params_cen_x=params_cen_x,
+                    params_cen_y=params_cen_y,
+                )
             except Exception as e:
                 n_skipfail += 1
                 size = 0 if fitInputs is None else size_new
@@ -1418,3 +1425,30 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             Additional keyword arguments to pass to self.modeller.
         """
         pass
+
+    def post_fit(
+        self,
+        idx: int,
+        model: g2f.ModelF | g2f.ModelD,
+        results: astropy.table.row.Row,
+        params_cen_x: dict[str, g2f.CentroidXParameterD],
+        params_cen_y: dict[str, g2f.CentroidYParameterD],
+    ):
+        """Process model fit results.
+
+        This method can be overridden and used for debugging, testing or
+        anything else.
+
+        Parameters
+        ----------
+        idx
+            The index of the source being fit.
+        model
+            The model of the source.
+        results
+            The results table row for this source.
+        params_cen_x
+            The x-axis centroid parameters by results table key.
+        params_cen_y
+            The y-axis centroid parameters by results table key.
+        """
