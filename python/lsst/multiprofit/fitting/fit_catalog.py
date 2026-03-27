@@ -238,7 +238,7 @@ class CatalogFitterConfig(pexConfig.Config):
         """Get the suffix for y-axis columns."""
         return self._get_label(self.naming_scheme, self._suffix_y)
 
-    def make_catalog(self, n_rows: int, **kwargs):
+    def make_catalog(self, n_rows: int, **kwargs) -> tuple[Table, list[ColumnInfo]]:
         """Make a catalog with default-initialized column values.
 
         Parameters
