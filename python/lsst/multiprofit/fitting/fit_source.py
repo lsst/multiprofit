@@ -115,6 +115,11 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
         " coordinates (e.g. set to -0.5 if the bottom-left corner is -0.5, -0.5)",
         default=0,
     )
+    centroid_scale_factor = pexConfig.Field[float](
+        doc="Factor to multiply centroid parameter scaling by, for optimizers that rescale parameter "
+        "values in proposals. Must be >0. Values <1 should result in larger shifts in proposals.",
+        default=1.0,
+    )
     compute_radec_covariance = pexConfig.Field[bool](
         doc="Whether to compute the RA/dec covariance. Ignore if convert_cen_xy_to_radec is False.",
         default=False,
@@ -833,11 +838,17 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         suffix_cenx = f"{key_cen}{config.get_suffix_x()}"
         suffix_ceny = f"{key_cen}{config.get_suffix_y()}"
 
+        param_scale_factors = {}
+        centroid_scale_factor = config.centroid_scale_factor
+
         # Add each param to appropriate and more specific pre-computed lists
         for key, param in params.items():
             key_full = f"{prefix}{key}"
             is_cenx = isinstance(param, g2f.CentroidXParameterD)
             is_ceny = isinstance(param, g2f.CentroidYParameterD)
+
+            if is_cenx or is_ceny:
+                param_scale_factors[param] = centroid_scale_factor
 
             # Add the corresponding error key to the appropriate list
             if compute_errors:
@@ -1004,7 +1015,11 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                     observation.image.data[~np.isfinite(observation.image.data)] = 0
 
                 result_full = self.modeller.fit_model(
-                    model, fitinputs=fitInputs, config=config.config_fit, **kwargs
+                    model,
+                    fitinputs=fitInputs,
+                    config=config.config_fit,
+                    param_scale_factors=param_scale_factors,
+                    **kwargs,
                 )
                 fitInputs = result_full.inputs
                 results[f"{prefix}n_iter"][idx] = result_full.n_eval_func

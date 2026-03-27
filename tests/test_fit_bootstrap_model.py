@@ -162,6 +162,7 @@ def config_fitter_source(channels) -> CatalogSourceFitterConfigData:
         convert_cen_xy_to_radec=False,
         compute_errors_no_covar=compute_errors_no_covar,
         compute_errors_from_jacobian=compute_errors_from_jacobian,
+        centroid_scale_factor=0.5,
     )
     config_data = CatalogSourceFitterConfigData(
         channels=tuple(channels.values()),
