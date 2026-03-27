@@ -934,6 +934,11 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         channels = self.get_channels(catexps)
         results, columns = config.make_catalog(n_rows, bands=list(channels.keys()))
 
+        for k in params_cen_x:
+            results[f"{k}_cen_x_init"] = np.full(len(catalog_multi), np.nan)
+        for k in params_cen_y:
+            results[f"{k}_cen_y_init"] = np.full(len(catalog_multi), np.nan)
+
         # Copy centroid error columns into results ( if needed)
         self.copy_centroid_errors(
             columns_cenx_err_copy=columns_cenx_err_copy,
@@ -994,6 +999,10 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                     config_data=config_data,
                     values_init=values_init,
                 )
+                for k, param in params_cen_x.items():
+                    results[f"{k}_cen_x_init"][idx] = param.value
+                for k, param in params_cen_y.items():
+                    results[f"{k}_cen_y_init"][idx] = param.value
 
                 # Caches the jacobian residual if the data size is unchanged
                 # Note: this will need to change with priors
