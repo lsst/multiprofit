@@ -350,7 +350,7 @@ def plot_model_rgb(
     if has_model:
         # TODO: Draw masks in each channel? or draw the combined mask, like:
         # mask_inv_all = np.prod(list(masks_inv.values()), axis=0)
-        residuals = [(images_model_unweighted[idx] - images_data_unweighted[idx]) for idx in range(3)]
+        residuals = [(images_data_unweighted[idx] - images_model_unweighted[idx]) for idx in range(3)]
         resid_max = np.nanpercentile(
             np.abs(np.concatenate([residual[np.isfinite(residual)] for residual in residuals])), 98
         )
