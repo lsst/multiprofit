@@ -1014,7 +1014,6 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         }
 
         range_idx = range(n_rows)
-        # range_idx = [384, 1656, 1725, 2018, 2517, 3747, 4426, 4650]
 
         # TODO: Do this check with dummy data
         # It might not work with real data if the first row is bad
