@@ -33,6 +33,7 @@ def plot_model_singleband(
     idx_obs: int,
     percentile_scaling: float = 98.0,
     sigma_max: float = 10,
+    **kwargs,
 ) -> tuple[Figure, Axes]:
     """Plot a model and its residuals compared to a single observation.
 
@@ -45,6 +46,10 @@ def plot_model_singleband(
     percentile_scaling
         The percentile of the non-nan data values to use as a maximum for
         arcsinh scaling.
+    sigma_max
+        The maximum multiple of sigma for error-scaled plots.
+    **kwargs
+        Keyword arguments to pass to matplotlib.pyplot.subplots.
 
     Returns
     -------
@@ -65,7 +70,7 @@ def plot_model_singleband(
     value_max = np.nanpercentile(img_model, percentile_scaling)
     offset = 1 / np.nanmedian(obs.sigma_inv.data)
 
-    fig, ax = plt.subplots(nrows=2, ncols=2)
+    fig, ax = plt.subplots(nrows=2, ncols=2, **kwargs)
 
     ax[0][0].imshow(np.arcsinh((img_data + offset) / value_max), cmap="gray", origin="lower")
     ax[0][0].tick_params(labelleft=False)
