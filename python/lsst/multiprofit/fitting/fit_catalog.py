@@ -105,6 +105,10 @@ class CatalogFitterConfig(pexConfig.Config):
         default="default",
     )
     prefix_column = pexConfig.Field[str](default="mpf_", doc="Column name prefix")
+    store_initial_centroid_values = pexConfig.Field[bool](
+        default=True,
+        doc="Whether to store initial centroid parameter values.",
+    )
     suffix_error = pexConfig.Field[str](
         default="_err",
         doc="Default suffix for error columns. Can be overridden by naming_scheme.",

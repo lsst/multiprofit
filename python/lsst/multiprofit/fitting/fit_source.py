@@ -319,6 +319,48 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
             columns.append(ColumnInfo(key=f"{prefix}delta_lnL_fit_linear", dtype="f8"))
         if self.fit_psmodel_final:
             columns.append(ColumnInfo(key=f"{prefix}delta_lnL_fit_ps", dtype="f8"))
+
+        store_initial_centroid_values = self.store_initial_centroid_values
+
+        if store_initial_centroid_values:
+            key_cen = self.get_key_cen()
+            cen_underscored = key_cen.startswith("_")
+            suffix_cenx = f"{key_cen}{self.get_suffix_x()}"
+            suffix_ceny = f"{key_cen}{self.get_suffix_y()}"
+
+        # This condition should be expanded with or if more configurable
+        # per-parameter fields are added
+        if store_initial_centroid_values:
+            parameters = CatalogSourceFitterConfigData(
+                config=self,
+                channels=[g2f.Channel.get(band) for band in bands],
+            ).parameters
+
+            for key, param in parameters.items():
+                key_full = f"{prefix}{key}"
+                is_cenx = isinstance(param, g2f.CentroidXParameterD)
+                is_ceny = isinstance(param, g2f.CentroidYParameterD)
+                is_cen = is_cenx or is_ceny
+
+                if is_cen and store_initial_centroid_values:
+                    if is_cenx:
+                        suffix_ax = suffix_cenx
+                    elif is_ceny:
+                        suffix_ax = suffix_ceny
+                    else:
+                        raise RuntimeError("Unknown axis for centroid param")
+                    prefix_cen, suffix_cen = (
+                        ("", key_full)
+                        if (cen_underscored and (key_full == suffix_ax[1:]))
+                        else key_full.split(suffix_ax)
+                    )
+                    columns.append(
+                        ColumnInfo(
+                            key=f"{key_full}_init",
+                            dtype="f8",
+                            description=f"Initial value for {prefix_cen}_cen{suffix_ax}",
+                        )
+                    )
         return columns
 
     def schema(
@@ -832,6 +874,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         columns_param_flux: dict[str, g2f.IntegralParameterD] = {}
         params_cen_x: dict[str, g2f.CentroidXParameterD] = {}
         params_cen_y: dict[str, g2f.CentroidYParameterD] = {}
+        values_init_to_store: dict[str, g2f.ParameterD] = {}
         columns_err = []
 
         errors_hessian: bool = config.compute_errors == "INV_HESSIAN"
@@ -876,23 +919,20 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             )
             if isinstance(param, g2f.IntegralParameterD):
                 columns_param_flux[key_full] = param
-            elif config.convert_cen_xy_to_radec:
+            if is_cen:
                 # Infer the prefix if possible, after checking for a dropped
                 # leading underscore in case there's no prefix
-                if is_cenx:
-                    prefix_cen, suffix_cen = (
-                        ("", key_full)
-                        if (cen_underscored and (key_full == suffix_cenx[1:]))
-                        else key_full.split(suffix_cenx)
-                    )
-                    params_cen_x[prefix_cen] = param
-                elif is_ceny:
-                    prefix_cen, suffix_cen = (
-                        ("", key_full)
-                        if (cen_underscored and (key_full == suffix_ceny[1:]))
-                        else key_full.split(suffix_ceny)
-                    )
-                    params_cen_y[prefix_cen] = param
+                params_cen, suffix_cen = (
+                    (params_cen_x, suffix_cenx) if is_cenx else (params_cen_y, suffix_ceny)
+                )
+                prefix_cen, suffix_cen = (
+                    ("", key_full)
+                    if (cen_underscored and (key_full == suffix_cen[1:]))
+                    else key_full.split(suffix_cen)
+                )
+                params_cen[prefix_cen] = param
+                if config.store_initial_centroid_values:
+                    values_init_to_store[f"{key_full}_init"] = param
 
         if config.convert_cen_xy_to_radec or config.fit_psmodel_final:
             assert params_cen_x.keys() == params_cen_y.keys()
@@ -974,6 +1014,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         }
 
         range_idx = range(n_rows)
+        # range_idx = [384, 1656, 1725, 2018, 2517, 3747, 4426, 4650]
 
         # TODO: Do this check with dummy data
         # It might not work with real data if the first row is bad
@@ -1009,10 +1050,9 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                     config_data=config_data,
                     values_init=values_init,
                 )
-                for k, param in params_cen_x.items():
-                    results[f"{k}_cen_x_init"][idx] = param.value
-                for k, param in params_cen_y.items():
-                    results[f"{k}_cen_y_init"][idx] = param.value
+                if config.store_initial_centroid_values:
+                    for key_full, param in values_init_to_store.items():
+                        results[key_full][idx] = param.value
 
                 # Caches the jacobian residual if the data size is unchanged
                 # Note: this will need to change with priors
