@@ -80,9 +80,13 @@ def plot_model_singleband(
     ax[0][1].set_title(f"{band}-band Model")
     ax[1][0].imshow(np.arcsinh((img_data - img_model) / value_max), cmap="gray", origin="lower")
     ax[1][0].tick_params(labelleft=False)
-    ax[1][0].set_title(f"{band}-band Residual (D-M)")
-    ax[1][1].imshow((img_data - img_model) * obs.sigma_inv.data, vmin=-sigma_max, vmax=sigma_max, cmap="gray", origin="lower")
+    ax[1][0].set_title(f"{band}-band Residual (data-model)")
+    ax[1][1].imshow(
+        (img_data - img_model) * obs.sigma_inv.data,
+        vmin=-sigma_max, vmax=sigma_max, cmap="gray", origin="lower",
+    )
     ax[1][1].tick_params(labelleft=False)
-    ax[1][1].set_title(f"{band}-band Residual (D-M)/sigma +/- {sigma_max:.2f}")
+    ax[1][1].set_title(f"{band}-band Residual ((data-model)/σ +/- {sigma_max:.2f}")
+    ax[1][1].imshow((img_data - img_model) * obs.sigma_inv.data, cmap="gray", origin="lower")
 
     return fig, ax
