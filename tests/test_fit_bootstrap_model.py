@@ -225,6 +225,9 @@ def test_fit_psf(config_fitter_psfs, tables_psf_fits):
         assert len(results) == n_sources
         assert np.sum(results["mpf_psf_unknown_flag"]) == 0
         assert all(np.isfinite(list(results[0].values())))
+        schema = config_fitter_psfs[band].config.schema()
+        assert results.colnames == [x.key for x in schema]
+
         config_data_psf = config_fitter_psfs[band]
         psf_model_init = config_data_psf.config.make_psf_model()
         psfdata = CatalogPsfFitterConfigData(config=config_data_psf.config)
@@ -255,7 +258,7 @@ def test_fit_psf(config_fitter_psfs, tables_psf_fits):
                 assert np.isclose(p_init.value, value, atol=atol, rtol=rtol)
 
 
-def test_fit_source(config_fitter_source, config_data_sources):
+def test_fit_source(channels, config_fitter_source, config_data_sources):
     """Test bootstrap source fitting."""
     fitter = CatalogSourceFitterBootstrap()
     # We don't have or need a multiband input catalog - just use the first one
@@ -277,10 +280,13 @@ def test_fit_source(config_fitter_source, config_data_sources):
         assert np.all(results[f"mpf_{conversion_error_key}"] == 1)
 
     config_fitter_source.config.convert_cen_xy_to_radec = False
+    schema = config_fitter_source.config.schema(tuple(channels.keys()))
     results = fitter.fit(catalog_multi=catalog_multi, catexps=catexps, config_data=config_fitter_source)
+
     assert len(results) == n_sources
     assert np.sum(results["mpf_unknown_flag"]) == 0
     assert all(np.isfinite(list(results[0].values())))
+    assert results.colnames == [x.key for x in schema]
 
     model = fitter.get_model(
         0,

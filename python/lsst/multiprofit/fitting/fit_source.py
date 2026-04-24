@@ -306,14 +306,19 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
 
         return sources, priors
 
-    def schema_configurable(self) -> list[ColumnInfo]:
+    def schema_configurable(self, bands: list[str] | None = None) -> list[ColumnInfo]:
+        if bands is None or not (len(bands) > 0):
+            raise ValueError("CatalogSourceFitter must provide at least one band")
+
+        prefix = self.prefix_column
+
         columns = []
         if self.config_fit.eval_residual:
-            columns.append(ColumnInfo(key="n_eval_jac", dtype="i4"))
+            columns.append(ColumnInfo(key=f"{prefix}n_eval_jac", dtype="i4"))
         if self.fit_linear_final:
-            columns.append(ColumnInfo(key="delta_lnL_fit_linear", dtype="f8"))
+            columns.append(ColumnInfo(key=f"{prefix}delta_lnL_fit_linear", dtype="f8"))
         if self.fit_psmodel_final:
-            columns.append(ColumnInfo(key="delta_lnL_fit_ps", dtype="f8"))
+            columns.append(ColumnInfo(key=f"{prefix}delta_lnL_fit_ps", dtype="f8"))
         return columns
 
     def schema(
@@ -323,6 +328,8 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
         if bands is None or not (len(bands) > 0):
             raise ValueError("CatalogSourceFitter must provide at least one band")
         schema = super().schema(bands)
+
+        prefix = self.prefix_column
 
         parameters = CatalogSourceFitterConfigData(
             config=self,
@@ -339,7 +346,7 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
         idx_start = len(schema)
         schema.extend(
             [
-                ColumnInfo(key=key, dtype="f8", unit=units.get(type(param)))
+                ColumnInfo(key=f"{prefix}{key}", dtype="f8", unit=units.get(type(param)))
                 for key, param in parameters.items()
             ]
         )
@@ -373,20 +380,20 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
                 if suffix_radec is not None:
                     # Add whatever the corresponding prefix is, and also
                     # remove any leading underscore if there's no prefix
-                    prefix, suffix = (
+                    prefix_cen, suffix = (
                         ("", suffix_radec[1:])
                         if (cen_underscored and (key == suffix_xy[1:]))
                         else (key.split(suffix_xy)[0], suffix_radec)
                     )
-                    schema.append(ColumnInfo(key=f"{prefix}{suffix}", dtype="f8", unit=u.deg))
+                    schema.append(ColumnInfo(key=f"{prefix}{prefix_cen}{suffix}", dtype="f8", unit=u.deg))
                     if compute_errors and is_y:
                         suffix_radec = f"{label_cen}{self.get_suffix_ra_dec_cov()}"
-                        prefix, suffix = (
+                        prefix_cen, suffix = (
                             ("", suffix_radec[1:])
                             if (cen_underscored and (key == suffix_xy[1:]))
                             else (key.split(suffix_xy)[0], suffix_radec)
                         )
-                        keys_cov[len(schema) - 1] = f"{prefix}{suffix}"
+                        keys_cov[len(schema) - 1] = f"{prefix}{prefix_cen}{suffix}"
         if compute_errors:
             suffix = self.suffix_error
             idx_end = len(schema)
@@ -396,7 +403,7 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
                 if (key_cov := keys_cov.get(idx)) is not None:
                     schema.append(ColumnInfo(key=key_cov, dtype="f8", unit=u.deg**2))
 
-        schema.extend(self.schema_configurable())
+        schema.extend(self.schema_configurable(bands=bands))
         return schema
 
 

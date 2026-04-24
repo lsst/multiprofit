@@ -260,9 +260,9 @@ class CatalogFitterConfig(pexConfig.Config):
         keys = [column.key for column in columns]
         prefix = self.prefix_column
 
-        idx_flag_first = keys.index("unknown_flag")
+        idx_flag_first = keys.index(f"{prefix}unknown_flag")
         idx_flag_last = idx_flag_first + len(self.flag_errors)
-        dtypes = [(f"{prefix if col.key != self.column_id else ''}{col.key}", col.dtype) for col in columns]
+        dtypes = [(col.key, col.dtype) for col in columns]
 
         results = Table(np.empty(n_rows, dtype=dtypes))
         for colname in results.colnames:
@@ -280,7 +280,7 @@ class CatalogFitterConfig(pexConfig.Config):
         # Set nan-default flags to False instead
         errors = []
         for flag in columns[idx_flag_first : (idx_flag_last + 1)]:
-            column = results[f"{prefix}{flag.key}"]
+            column = results[flag.key]
             column[:] = False
             if not ((column.dtype == bool) and column.name.endswith("_flag")):
                 errors.append(f"{column.name=} should end with _flag and {column.dtype=} must be bool")
@@ -308,37 +308,44 @@ class CatalogFitterConfig(pexConfig.Config):
         schema
             An ordered list of ColumnInfo instances.
         """
+        prefix = self.prefix_column
         schema = [
             ColumnInfo(key=self.column_id, dtype="i8", description="Source ID"),
-            ColumnInfo(key="n_iter", dtype="i4", description="Number of fit iterations"),
+            ColumnInfo(key=f"{prefix}n_iter", dtype="i4", description="Number of fit iterations"),
             ColumnInfo(
-                key="time_eval",
+                key=f"{prefix}time_eval",
                 dtype="f8",
                 description=FitResult.model_fields["time_eval"].title,
                 unit=u.s,
             ),
             ColumnInfo(
-                key="time_fit",
+                key=f"{prefix}time_fit",
                 dtype="f8",
                 description=FitResult.model_fields["time_eval"].title,
                 unit=u.s,
             ),
             ColumnInfo(
-                key="time_full",
+                key=f"{prefix}time_full",
                 dtype="f8",
                 description="Total runtime spent",
                 unit=u.s,
             ),
-            ColumnInfo(key="chisq_reduced", description="Reduced chi-squared of best-fit model", dtype="f8"),
             ColumnInfo(
-                key="unknown_flag",
-                description="True if an unknown exception was raised and not caught",
+                key=f"{prefix}chisq_reduced", description="Reduced chi-squared of best-fit model", dtype="f8"
+            ),
+            ColumnInfo(
+                key=f"{prefix}unknown_flag",
                 dtype="bool",
+                description="True if an unknown exception was raised and not caught",
             ),
         ]
         schema.extend(
             [
-                ColumnInfo(key=key, description=f"True if a {key} exception was caught", dtype="bool")
+                ColumnInfo(
+                    key=f"{prefix}{key}",
+                    dtype="bool",
+                    description=f"True if a {key} exception was caught",
+                )
                 for key in self.flag_errors.keys()
             ]
         )

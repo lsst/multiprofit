@@ -129,7 +129,7 @@ class CatalogPsfFitterConfig(CatalogFitterConfig):
     def schema_configurable(self) -> list[ColumnInfo]:
         columns = []
         if self.config_fit.eval_residual:
-            columns.append(ColumnInfo(key="n_eval_jac", dtype="i4"))
+            columns.append(ColumnInfo(key=f"{self.prefix_column}n_eval_jac", dtype="i4"))
         return columns
 
     def schema(
@@ -147,6 +147,7 @@ class CatalogPsfFitterConfig(CatalogFitterConfig):
             if len(bands) != 1:
                 raise ValueError("CatalogPsfFitter must have exactly one band")
         schema = super().schema(bands)
+        prefix = self.prefix_column
         parameters = CatalogPsfFitterConfigData(config=self).parameters
         unit_size = "pix"
         units = {
@@ -157,7 +158,7 @@ class CatalogPsfFitterConfig(CatalogFitterConfig):
         }
         schema.extend(
             [
-                ColumnInfo(key=key, dtype="f8", unit=units.get(type(param)))
+                ColumnInfo(key=f"{prefix}{key}", dtype="f8", unit=units.get(type(param)))
                 for key, param in parameters.items()
             ]
         )
