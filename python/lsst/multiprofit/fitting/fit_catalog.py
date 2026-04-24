@@ -33,7 +33,7 @@ from astropy.table import Table
 import lsst.pex.config as pexConfig
 
 from ..componentconfig import GaussianComponentConfig, SersicComponentConfig
-from ..modeller import ModelFitConfig
+from ..modeller import FitResult, ModelFitConfig
 from ..utils import frozen_arbitrary_allowed_config
 
 
@@ -309,15 +309,39 @@ class CatalogFitterConfig(pexConfig.Config):
             An ordered list of ColumnInfo instances.
         """
         schema = [
-            ColumnInfo(key=self.column_id, dtype="i8"),
-            ColumnInfo(key="n_iter", dtype="i4"),
-            ColumnInfo(key="time_eval", dtype="f8", unit=u.s),
-            ColumnInfo(key="time_fit", dtype="f8", unit=u.s),
-            ColumnInfo(key="time_full", dtype="f8", unit=u.s),
-            ColumnInfo(key="chisq_reduced", dtype="f8"),
-            ColumnInfo(key="unknown_flag", dtype="bool"),
+            ColumnInfo(key=self.column_id, dtype="i8", description="Source ID"),
+            ColumnInfo(key="n_iter", dtype="i4", description="Number of fit iterations"),
+            ColumnInfo(
+                key="time_eval",
+                dtype="f8",
+                description=FitResult.model_fields["time_eval"].title,
+                unit=u.s,
+            ),
+            ColumnInfo(
+                key="time_fit",
+                dtype="f8",
+                description=FitResult.model_fields["time_eval"].title,
+                unit=u.s,
+            ),
+            ColumnInfo(
+                key="time_full",
+                dtype="f8",
+                description="Total runtime spent",
+                unit=u.s,
+            ),
+            ColumnInfo(key="chisq_reduced", description="Reduced chi-squared of best-fit model", dtype="f8"),
+            ColumnInfo(
+                key="unknown_flag",
+                description="True if an unknown exception was raised and not caught",
+                dtype="bool",
+            ),
         ]
-        schema.extend([ColumnInfo(key=key, dtype="bool") for key in self.flag_errors.keys()])
+        schema.extend(
+            [
+                ColumnInfo(key=key, description=f"True if a {key} exception was caught", dtype="bool")
+                for key in self.flag_errors.keys()
+            ]
+        )
         # Subclasses should always write out centroids even if not fitting
         # They are helpful for reconstructing models
         return schema
