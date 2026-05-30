@@ -922,6 +922,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             time_final = time_init
 
             try:
+                self.validate_source(idx_row=idx, catalog_multi=catalog_multi)
                 data, psf_models = config.make_model_data(idx_row=idx, catexps=catexps)
                 if data.size == 0:
                     raise NoDataError("make_model_data returned empty data")
@@ -1344,3 +1345,21 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             Additional keyword arguments to pass to self.modeller.
         """
         pass
+
+    def validate_source(
+        self,
+        idx_row: int,
+        catalog_multi: Sequence,
+    ) -> None:
+        """Validate that the source is suitable to fit.
+
+        Subclasses may override this method to raise a relevant exception
+        if the source should be skipped.
+
+        Parameters
+        ----------
+        idx_row
+            The index of the row in the multiband catalog.
+        catalog_multi
+            The multiband input catalog.
+        """
