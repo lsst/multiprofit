@@ -261,7 +261,7 @@ class CatalogFitterConfig(pexConfig.Config):
 
         idx_flag_first = keys.index("unknown_flag")
         idx_flag_last = idx_flag_first + len(self.flag_errors)
-        dtypes = [(f'{prefix if col.key != self.column_id else ""}{col.key}', col.dtype) for col in columns]
+        dtypes = [(f"{prefix if col.key != self.column_id else ''}{col.key}", col.dtype) for col in columns]
 
         results = Table(np.empty(n_rows, dtype=dtypes))
         for colname in results.colnames:
