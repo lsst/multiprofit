@@ -17,6 +17,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Astronomy",
 ]
 keywords = [
@@ -56,10 +58,6 @@ where = ["python"]
 [tool.setuptools.dynamic]
 version = { attr = "lsst_versions.get_lsst_version" }
 
-[tool.black]
-line-length = 110
-target-version = ["py311"]
-
 [tool.coverage.report]
 exclude_lines = [
     "pragma: no cover",
@@ -71,11 +69,6 @@ exclude_lines = [
 
 [tool.pytest.ini_options]
 # Prevent pytest from looking for configs in parent directories.
-
-[tool.isort]
-profile = "black"
-line_length = 110
-force_sort_within_sections = true
 
 [tool.lsst_versions]
 write_to = "python/lsst/multiprofit/version.py"
@@ -107,13 +100,18 @@ checks = [
     "EX01", # Example section.
     "GL01", # Summary text can start on same line as """
     "GL08", # Do not require docstring.
-    "PR04", # numpydoc parameter types are redundant with type hints
+    "PR04", # New Sphinx can infer types from python typing
     "RT01", # Unfortunately our @property trigger this.
     "RT02", # Does not want named return value. DM style says we do.
     "SA01", # See Also section.
     "SA04", # We don't use descriptions with See Also.
     "SS05", # pydocstyle is better at finding infinitive verb.
     "SS06", # Summary can go into second line.
+]
+exclude = [
+    "^test_.*",  # Do not test docstrings in test code.
+    '^__init__$',
+    '\._[a-zA-Z_]+$',  # Private methods.
 ]
 
 [tool.pydocstyle]
@@ -129,12 +127,10 @@ add-ignore = ["D107", "D105", "D102", "D100", "D200", "D205", "D400", "D104"]
 [tool.ruff]
 exclude = [
     "__init__.py",
-    "examples/fithsc.py",
-    "examples/test_utils.py",
     "tests/*.py",
 ]
 line-length = 110
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 ignore = [
