@@ -25,7 +25,7 @@ __all__ = [
     "FigureAxes",
 ]
 
-from typing import Iterable
+from collections.abc import Iterable
 
 import matplotlib.axes
 import matplotlib.figure

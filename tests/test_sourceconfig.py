@@ -19,6 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import numpy as np
+import pytest
+
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit.componentconfig import (
     GaussianComponentConfig,
@@ -28,8 +31,6 @@ from lsst.multiprofit.componentconfig import (
 )
 from lsst.multiprofit.sourceconfig import ComponentGroupConfig, SourceConfig
 from lsst.multiprofit.utils import get_params_uniq
-import numpy as np
-import pytest
 
 
 @pytest.fixture(scope="module")

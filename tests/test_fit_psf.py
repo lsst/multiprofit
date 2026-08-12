@@ -19,9 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import pytest
+
 from lsst.multiprofit.fitting.fit_psf import CatalogPsfFitterConfig, CatalogPsfFitterConfigData
 from lsst.multiprofit.utils import get_params_uniq
-import pytest
 
 
 @pytest.fixture(scope="module")

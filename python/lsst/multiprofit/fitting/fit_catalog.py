@@ -19,17 +19,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["CatalogExposureABC", "ColumnInfo", "CatalogFitterConfig"]
+__all__ = ["CatalogExposureABC", "CatalogFitterConfig", "ColumnInfo"]
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import ClassVar
 
-from astropy.table import Table
 import astropy.units as u
-import lsst.pex.config as pexConfig
 import numpy as np
 import pydantic
+from astropy.table import Table
+
+import lsst.pex.config as pexConfig
 
 from ..componentconfig import GaussianComponentConfig, SersicComponentConfig
 from ..modeller import ModelFitConfig

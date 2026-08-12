@@ -22,6 +22,9 @@
 import math
 
 import astropy.table
+import numpy as np
+import pytest
+
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit.componentconfig import (
     CentroidConfig,
@@ -54,8 +57,6 @@ from lsst.multiprofit.observationconfig import CoordinateSystemConfig
 from lsst.multiprofit.plotting import ErrorValues, plot_catalog_bootstrap, plot_loglike
 from lsst.multiprofit.sourceconfig import ComponentGroupConfig, SourceConfig
 from lsst.multiprofit.utils import get_params_uniq
-import numpy as np
-import pytest
 
 shape_img = (23, 27)
 reff_x_src, reff_y_src, rho_src, nser_src = 2.5, 3.6, -0.25, 2.0

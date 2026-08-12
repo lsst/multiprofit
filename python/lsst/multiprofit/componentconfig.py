@@ -20,25 +20,26 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 __all__ = [
-    "ParameterConfig",
-    "FluxFractionParameterConfig",
-    "FluxParameterConfig",
     "CentroidConfig",
     "ComponentData",
-    "Fluxes",
     "EllipticalComponentConfig",
+    "FluxFractionParameterConfig",
+    "FluxParameterConfig",
+    "Fluxes",
     "GaussianComponentConfig",
-    "SersicIndexParameterConfig",
+    "ParameterConfig",
     "SersicComponentConfig",
+    "SersicIndexParameterConfig",
 ]
 
-from abc import abstractmethod
 import string
+from abc import abstractmethod
 from typing import Any, ClassVar
+
+import pydantic
 
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig
-import pydantic
 
 from .limits import limits_ref
 from .priors import ShapePriorConfig

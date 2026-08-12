@@ -20,31 +20,32 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 __all__ = [
-    "InvalidProposalError",
-    "fit_methods_linear",
-    "LinearGaussians",
-    "make_image_gaussians",
-    "make_psf_model_null",
     "FitInputsBase",
     "FitInputsDummy",
-    "ModelFitConfig",
     "FitResult",
+    "InvalidProposalError",
+    "LinearGaussians",
+    "ModelFitConfig",
     "Modeller",
+    "fit_methods_linear",
+    "make_image_gaussians",
+    "make_psf_model_null",
 ]
 
-from abc import ABC, abstractmethod
-from collections.abc import Sequence
 import logging
 import sys
 import time
-from typing import Any, ClassVar, Iterable, TypeAlias
+from abc import ABC, abstractmethod
+from collections.abc import Iterable, Sequence
+from typing import Any, ClassVar, TypeAlias
+
+import numpy as np
+import pydantic
+import scipy.optimize as spopt
 
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig
-import numpy as np
-import pydantic
-import scipy.optimize as spopt
 
 from .model_utils import make_image_gaussians, make_psf_model_null
 from .utils import arbitrary_allowed_config, frozen_arbitrary_allowed_config, get_params_uniq
@@ -57,9 +58,15 @@ else:
 
     Self = TypeVar("Self", bound="LinearGaussians")  # type: ignore
 
+_has_py_13_plus = sys.version_info >= (3, 13, 0)
+if _has_py_13_plus:
+    Model: type = g2f.ModelD | g2f.ModelF
+else:
+    Model: TypeAlias = g2f.ModelD | g2f.ModelF  # noqa: UP040
+
 try:
     # TODO: try importlib.util.find_spec
-    from fastnnls import fnnls  # noqa
+    from fastnnls import fnnls
 
     has_fastnnls = True
 except ImportError:
@@ -67,14 +74,11 @@ except ImportError:
 
 try:
     # TODO: try importlib.util.find_spec
-    import pygmo as pg  # noqa
+    import pygmo as pg
 
     has_pygmo = True
 except ImportError:
     has_pygmo = False
-
-
-Model: TypeAlias = g2f.ModelD | g2f.ModelF
 
 
 class InvalidProposalError(ValueError):
@@ -1065,7 +1069,7 @@ class Modeller:
             else:
                 # The initial evaluate will fill in jac for the next line
                 # _ll_init is assigned just for convenient debugging
-                _ll_init = model.evaluate()  # noqa: F841
+                _ll_init = model.evaluate()
                 x_scale_jac_clipped = np.clip(1.0 / (np.sum(jac**2, axis=0) ** 0.5), 1e-5, 1e19)
                 result_opt = spopt.least_squares(
                     residual_scipy,
@@ -1171,7 +1175,7 @@ class Modeller:
                 if len(set(idx_obs)) != len(idx_obs):
                     raise ValueError(f"{idx_obs=} has duplicate values")
                 indices = tuple(idx_obs)
-                if not all(((idx_obs >= 0) and (idx_obs < n_data) for idx_obs in indices)):
+                if not all((idx_obs >= 0) and (idx_obs < n_data) for idx_obs in indices):
                     raise ValueError(f"idx_obs={indices} has values not >=0 and < {len(model.data)=}")
         else:
             indices = range(n_data)

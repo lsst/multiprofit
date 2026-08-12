@@ -19,6 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import numpy as np
+import pytest
+
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit.componentconfig import CentroidConfig, GaussianComponentConfig, ParameterConfig
 from lsst.multiprofit.model_utils import make_psf_model_null
@@ -26,8 +29,6 @@ from lsst.multiprofit.modelconfig import ModelConfig
 from lsst.multiprofit.observationconfig import CoordinateSystemConfig, ObservationConfig
 from lsst.multiprofit.plotting import abs_mag_sol_lsst, bands_weights_lsst, plot_model_rgb
 from lsst.multiprofit.sourceconfig import ComponentGroupConfig, SourceConfig
-import numpy as np
-import pytest
 
 sigma_inv = 1e4
 

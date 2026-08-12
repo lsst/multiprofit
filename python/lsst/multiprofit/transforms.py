@@ -19,13 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["get_logit_limited", "verify_transform_derivative", "transforms_ref"]
+__all__ = ["get_logit_limited", "transforms_ref", "verify_transform_derivative"]
 
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
+
+import numpy as np
 
 import lsst.gauss2d.fit as g2f
-import numpy as np
 
 from .limits import limits_ref
 

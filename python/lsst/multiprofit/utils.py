@@ -29,9 +29,10 @@ __all__ = [
 import logging
 from typing import Any
 
+import pydantic
+
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig
-import pydantic
 
 _LOG = logging.getLogger(__name__)
 

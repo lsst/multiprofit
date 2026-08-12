@@ -19,13 +19,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import pytest
+
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit import (
-    ComponentGroupConfig, GaussianComponentConfig, ModelConfig, ModelFitConfig, SourceConfig,
+    ComponentGroupConfig,
+    GaussianComponentConfig,
+    ModelConfig,
+    ModelFitConfig,
+    SourceConfig,
 )
 from lsst.multiprofit.fitting.fit_source import CatalogSourceFitterConfig, CatalogSourceFitterConfigData
 from lsst.multiprofit.utils import get_params_uniq
-import pytest
 
 
 @pytest.fixture(scope="module")
@@ -43,11 +48,7 @@ def fitter_config() -> CatalogSourceFitterConfig:
                 "": SourceConfig(
                     component_groups={
                         "": ComponentGroupConfig(
-                            components_gauss=(
-                                {
-                                    "gauss": GaussianComponentConfig()
-                                }
-                            ),
+                            components_gauss=({"gauss": GaussianComponentConfig()}),
                         )
                     }
                 ),

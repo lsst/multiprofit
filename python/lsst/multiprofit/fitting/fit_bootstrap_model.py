@@ -29,15 +29,17 @@ __all__ = [
     "NoisyObservationConfig",
 ]
 
-from functools import cached_property
 import logging
-from typing import Any, ClassVar, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from functools import cached_property
+from typing import Any, ClassVar
 
 import astropy
-import lsst.gauss2d.fit as g2f
-import lsst.pex.config as pexConfig
 import numpy as np
 import pydantic
+
+import lsst.gauss2d.fit as g2f
+import lsst.pex.config as pexConfig
 
 from ..model_utils import make_image_gaussians
 from ..observationconfig import ObservationConfig

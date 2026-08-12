@@ -22,6 +22,9 @@
 import math
 import time
 
+import numpy as np
+import pytest
+
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit.componentconfig import (
@@ -39,8 +42,6 @@ from lsst.multiprofit.modeller import FitInputs, LinearGaussians, Modeller, fit_
 from lsst.multiprofit.observationconfig import CoordinateSystemConfig, ObservationConfig
 from lsst.multiprofit.sourceconfig import ComponentGroupConfig, SourceConfig
 from lsst.multiprofit.utils import get_params_uniq
-import numpy as np
-import pytest
 
 sigma_inv = 1e4
 
