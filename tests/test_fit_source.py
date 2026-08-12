@@ -35,12 +35,14 @@ from lsst.multiprofit.utils import get_params_uniq
 
 @pytest.fixture(scope="module")
 def channels() -> tuple[g2f.Channel]:
+    """Return dict of generic RGB channels."""
     channels = tuple(g2f.Channel.get(band) for band in ("R", "G", "B"))
     return channels
 
 
 @pytest.fixture(scope="module")
 def fitter_config() -> CatalogSourceFitterConfig:
+    """Return a default source fitter config."""
     config = CatalogSourceFitterConfig(
         config_fit=ModelFitConfig(),
         config_model=ModelConfig(
@@ -61,11 +63,13 @@ def fitter_config() -> CatalogSourceFitterConfig:
 
 @pytest.fixture(scope="module")
 def fitter_config_data(channels, fitter_config) -> CatalogSourceFitterConfigData:
+    """Return a default source fitter."""
     config_data = CatalogSourceFitterConfigData(channels=channels, config=fitter_config)
     return config_data
 
 
 def test_fitter_config_data(fitter_config_data):
+    """Test that the source fitter cached data are sensible."""
     parameters = fitter_config_data.parameters
     assert len(parameters) > 0
     sources, priors = fitter_config_data.sources_priors

@@ -35,11 +35,13 @@ sigma_inv = 1e4
 
 @pytest.fixture(scope="module")
 def channels() -> dict[str, g2f.Channel]:
+    """Return dict of generic RGB channels."""
     return {band: g2f.Channel.get(band) for band in bands_weights_lsst}
 
 
 @pytest.fixture(scope="module")
 def data(channels) -> g2f.DataD:
+    """Return initialized data in all bands."""
     n_rows, n_cols = 16, 21
     x_min, y_min = 0, 0
 
@@ -66,16 +68,19 @@ def data(channels) -> g2f.DataD:
 
 @pytest.fixture(scope="module")
 def psf_model():
+    """Return a trivial PSF model."""
     return make_psf_model_null()
 
 
 @pytest.fixture(scope="module")
 def psf_models(psf_model, channels) -> list[g2f.PsfModel]:
+    """Return the trivial PSF model for each band."""
     return [psf_model] * len(channels)
 
 
 @pytest.fixture(scope="module")
 def model(channels, data, psf_models):
+    """Return a single-Gaussian model with a trivial PSF."""
     fluxes_group = [{channels[band]: 10 ** (-0.4 * (mag - 8.9)) for band, mag in abs_mag_sol_lsst.items()}]
 
     modelconfig = ModelConfig(
@@ -112,6 +117,7 @@ def model(channels, data, psf_models):
 
 
 def test_plot_model_rgb(model):
+    """Test that RGB model plotting works."""
     fig, ax, fig_gs, ax_gs, *_ = plot_model_rgb(
         model,
         minimum=0,
@@ -127,6 +133,7 @@ def test_plot_model_rgb(model):
 
 
 def test_plot_model_rgb_auto(model):
+    """Test that RGB model plotting with automatic stretching works."""
     fig, ax, *_ = plot_model_rgb(
         model,
         Q=6,

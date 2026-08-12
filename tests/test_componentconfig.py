@@ -35,12 +35,14 @@ from lsst.multiprofit.utils import get_params_uniq, set_config_from_dict
 
 @pytest.fixture(scope="module")
 def centroid_limits():
+    """Return trivial limits for centroids."""
     limits = g2f.LimitsD(min=-np.inf, max=np.inf)
     return limits
 
 
 @pytest.fixture(scope="module")
 def centroid(centroid_limits):
+    """Return centroid parameters with trivial limits."""
     cenx = g2f.CentroidXParameterD(0, limits=centroid_limits, fixed=True)
     ceny = g2f.CentroidYParameterD(0, limits=centroid_limits, fixed=True)
     centroid = g2f.CentroidParameters(cenx, ceny)
@@ -49,10 +51,12 @@ def centroid(centroid_limits):
 
 @pytest.fixture(scope="module")
 def channels():
+    """Return dict of generic RGB channels."""
     return {band: g2f.Channel.get(band) for band in ("R", "G", "B")}
 
 
 def test_EllipticalComponentConfig():
+    """Test set_config_from_dict on a component."""
     config = EllipticalComponentConfig()
     config2 = EllipticalComponentConfig()
     set_config_from_dict(config2, config.toDict())
@@ -60,6 +64,7 @@ def test_EllipticalComponentConfig():
 
 
 def test_GaussianComponentConfig(centroid):
+    """Test GaussianComponentConfig init and funcs."""
     config = GaussianComponentConfig(
         rho=ParameterConfig(value_initial=0),
         size_x=ParameterConfig(value_initial=1.4),
@@ -99,6 +104,7 @@ def test_GaussianComponentConfig(centroid):
 
 
 def test_SersicConfig(centroid, channels):
+    """Test Sersic Component/Index Config init and funcs."""
     rho, size_x, size_y, sersic_index = -0.3, 1.4, 1.6, 3.2
     config = SersicComponentConfig(
         rho=ParameterConfig(value_initial=rho),
@@ -113,7 +119,7 @@ def test_SersicConfig(centroid, channels):
         integral_model=integral_model,
     )
     assert component_data.component is not None
-    # As long as there's a default Sersic index prior
+    # Will be true as long as there's a default Sersic index prior
     assert len(component_data.priors) == 1
     params = get_params_uniq(component_data.component)
     values_init = {
