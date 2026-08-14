@@ -37,7 +37,7 @@ import sys
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar, Self, TypeAlias
 
 import numpy as np
 import pydantic
@@ -49,14 +49,6 @@ import lsst.pex.config as pexConfig
 
 from .model_utils import make_image_gaussians, make_psf_model_null
 from .utils import arbitrary_allowed_config, frozen_arbitrary_allowed_config, get_params_uniq
-
-_has_py_11_plus = sys.version_info >= (3, 11, 0)
-if _has_py_11_plus:
-    from typing import Self
-else:
-    from typing import TypeVar
-
-    Self = TypeVar("Self", bound="LinearGaussians")  # type: ignore
 
 _has_py_13_plus = sys.version_info >= (3, 13, 0)
 if _has_py_13_plus:
@@ -189,10 +181,6 @@ class FitInputsDummy(FitInputsBase):
         return [
             "This is a dummy FitInputs and will never validate",
         ]
-
-
-if not _has_py_11_plus:
-    Self = TypeVar("Self", bound="FitInputs")  # type: ignore
 
 
 class FitInputs(FitInputsBase, pydantic.BaseModel):
