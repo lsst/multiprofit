@@ -18,14 +18,16 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import pytest
+
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit.observationconfig import CoordinateSystemConfig, ObservationConfig
-import pytest
 
 
 @pytest.fixture(scope="module")
 def kwargs_coordsys():
+    """Return kwargs for a coordinate system config."""
     return {
         "dx1": 0.4,
         "dy2": 1.6,
@@ -36,20 +38,24 @@ def kwargs_coordsys():
 
 @pytest.fixture(scope="module")
 def config_coordsys(kwargs_coordsys) -> CoordinateSystemConfig:
+    """Return a coordinate system config."""
     return CoordinateSystemConfig(**kwargs_coordsys)
 
 
 @pytest.fixture(scope="module")
 def coordsys(config_coordsys) -> g2.CoordinateSystem:
+    """Return a configured coordinate system."""
     return config_coordsys.make_coordinate_system()
 
 
 def test_CoordinateSystemConfig(kwargs_coordsys, coordsys):
+    """Test that the configured coordinate system matches its kwargs."""
     for kwarg, value in kwargs_coordsys.items():
         assert getattr(coordsys, kwarg) == value
 
 
 def test_ObservationConfig():
+    """Test that Observation configs work correctly."""
     n_cols, n_rows = 15, 17
     shape = [n_rows, n_cols]
     config = ObservationConfig(n_cols=n_cols, n_rows=n_rows)

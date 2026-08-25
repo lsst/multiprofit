@@ -19,20 +19,22 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from abc import ABC, abstractmethod
-from functools import cached_property
 import logging
 import time
-from typing import Any, ClassVar, Iterable, Mapping, Self, Sequence, Type
+from abc import ABC, abstractmethod
+from collections.abc import Iterable, Mapping, Sequence
+from functools import cached_property
+from typing import Any, ClassVar, Self
 
 import astropy
-from astropy.table import Table
 import astropy.units as u
+import numpy as np
+import pydantic
+from astropy.table import Table
+
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig
 from lsst.utils.logging import PeriodicLogger
-import numpy as np
-import pydantic
 
 from ..componentconfig import Fluxes, GaussianComponentConfig
 from ..errors import NoDataError, RaDecConversionNotImplementedError
@@ -44,9 +46,9 @@ from .fit_catalog import CatalogExposureABC, CatalogFitterConfig, ColumnInfo
 
 __all__ = [
     "CatalogExposureSourcesABC",
+    "CatalogSourceFitterABC",
     "CatalogSourceFitterConfig",
     "CatalogSourceFitterConfigData",
-    "CatalogSourceFitterABC",
 ]
 
 
@@ -314,7 +316,7 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
 
         parameters = CatalogSourceFitterConfigData(
             config=self,
-            channels=tuple((g2f.Channel.get(band) for band in bands)),
+            channels=tuple(g2f.Channel.get(band) for band in bands),
         ).parameters
         unit_size = u.Unit("pix")
         units = {
@@ -497,7 +499,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
 
     model_config: ClassVar[pydantic.ConfigDict] = frozen_arbitrary_allowed_config
 
-    errors_expected: dict[Type[Exception], str] = pydantic.Field(
+    errors_expected: dict[type[Exception], str] = pydantic.Field(
         default_factory=dict,
         title="A dictionary of Exceptions with the name of the flag column key to fill if raised.",
     )

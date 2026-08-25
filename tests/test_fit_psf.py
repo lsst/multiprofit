@@ -19,24 +19,28 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import pytest
+
 from lsst.multiprofit.fitting.fit_psf import CatalogPsfFitterConfig, CatalogPsfFitterConfigData
 from lsst.multiprofit.utils import get_params_uniq
-import pytest
 
 
 @pytest.fixture(scope="module")
 def fitter_config() -> CatalogPsfFitterConfig:
+    """Return a default PSF fitter config."""
     config = CatalogPsfFitterConfig()
     return config
 
 
 @pytest.fixture(scope="module")
 def fitter_config_data(fitter_config) -> CatalogPsfFitterConfigData:
+    """Return a default PSF fitter."""
     config_data = CatalogPsfFitterConfigData(config=fitter_config)
     return config_data
 
 
 def test_fitter_config_data(fitter_config_data):
+    """Test that the PSF fitter cached data are sensible."""
     parameters = fitter_config_data.parameters
     assert len(parameters) > 0
     psf_model = fitter_config_data.psf_model

@@ -22,6 +22,9 @@
 import math
 
 import astropy.table
+import numpy as np
+import pytest
+
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit.componentconfig import (
     CentroidConfig,
@@ -54,8 +57,6 @@ from lsst.multiprofit.observationconfig import CoordinateSystemConfig
 from lsst.multiprofit.plotting import ErrorValues, plot_catalog_bootstrap, plot_loglike
 from lsst.multiprofit.sourceconfig import ComponentGroupConfig, SourceConfig
 from lsst.multiprofit.utils import get_params_uniq
-import numpy as np
-import pytest
 
 shape_img = (23, 27)
 reff_x_src, reff_y_src, rho_src, nser_src = 2.5, 3.6, -0.25, 2.0
@@ -71,11 +72,13 @@ plot = False
 
 @pytest.fixture(scope="module")
 def channels():
+    """Return dict of generic RGB channels."""
     return {band: g2f.Channel.get(band) for band in ("R", "G", "B")}
 
 
 @pytest.fixture(scope="module")
 def config_fitter_psfs(channels) -> dict[g2f.Channel, CatalogExposurePsfBootstrap]:
+    """Return dict of bootstrap fitter configs."""
     config_datas = {}
     for idx, (band, channel) in enumerate(channels.items()):
         n_rows = 17 + idx * 2
@@ -122,6 +125,7 @@ def config_fitter_psfs(channels) -> dict[g2f.Channel, CatalogExposurePsfBootstra
 
 @pytest.fixture(scope="module")
 def config_fitter_source(channels) -> CatalogSourceFitterConfigData:
+    """Return dict of bootstrap source fitter configs."""
     config = CatalogSourceFitterConfig(
         config_fit=ModelFitConfig(fit_linear_iter=3),
         config_model=ModelConfig(
@@ -172,6 +176,7 @@ def config_fitter_source(channels) -> CatalogSourceFitterConfigData:
 
 @pytest.fixture(scope="module")
 def tables_psf_fits(config_fitter_psfs) -> dict[g2f.Channel, astropy.table.Table]:
+    """Return fits to bootstrapped PSF."""
     fitter = CatalogPsfFitter()
     fits = {
         channel: fitter.fit(
@@ -188,6 +193,7 @@ def config_data_sources(
     config_fitter_psfs,
     tables_psf_fits,
 ) -> dict[g2f.Channel, CatalogExposureSourcesBootstrap]:
+    """Return data and configs for bootstrap source fitting."""
     config_datas = {}
     for idx, (channel, config_fitter_psf) in enumerate(config_fitter_psfs.items()):
         table_psf_fits = tables_psf_fits[channel]
@@ -213,6 +219,7 @@ def config_data_sources(
 
 
 def test_fit_psf(config_fitter_psfs, tables_psf_fits):
+    """Check that the bootstrap PSF fits are sensible."""
     for band, results in tables_psf_fits.items():
         assert len(results) == n_sources
         assert np.sum(results["mpf_psf_unknown_flag"]) == 0
@@ -248,6 +255,7 @@ def test_fit_psf(config_fitter_psfs, tables_psf_fits):
 
 
 def test_fit_source(config_fitter_source, config_data_sources):
+    """Test bootstrap source fitting."""
     fitter = CatalogSourceFitterBootstrap()
     # We don't have or need a multiband input catalog - just use the first one
     catalog_multi = next(iter(config_data_sources.values())).get_catalog()

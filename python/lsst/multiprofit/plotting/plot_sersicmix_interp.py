@@ -21,16 +21,24 @@
 
 __all__ = ["Interpolator", "plot_sersicmix_interp"]
 
-from typing import Any, Type, TypeAlias
+import sys
+from typing import Any
 
-import lsst.gauss2d.fit as g2f
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 
+import lsst.gauss2d.fit as g2f
+
 from .types import FigureAxes
 
-Interpolator: TypeAlias = g2f.SersicMixInterpolator | tuple[Type, dict[str, Any]]
+_has_py_13_plus = sys.version_info >= (3, 13, 0)
+if _has_py_13_plus:
+    Interpolator: type = g2f.SersicMixInterpolator | tuple[type, dict[str, Any]]
+else:
+    from typing import TypeAlias
+
+    Interpolator: TypeAlias = g2f.SersicMixInterpolator | tuple[type, dict[str, Any]]  # noqa: UP040
 
 
 def plot_sersicmix_interp(
@@ -51,6 +59,10 @@ def plot_sersicmix_interp(
     -------
     figure
         The resulting figure.
+
+    Examples
+    --------
+    plot_sersicmix_interp
     """
     orders = {
         name: interp.order

@@ -22,7 +22,8 @@
 __all__ = ["plot_catalog_bootstrap"]
 
 from collections import defaultdict
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import astropy.table
 import matplotlib.pyplot as plt
@@ -138,9 +139,7 @@ def plot_catalog_bootstrap(
                             raise RuntimeError(
                                 f"Tried to set a new total flux column {colname_flux} but it already exists"
                             )
-                        paramvals_ref[colname_flux] = sum(
-                            (paramvals_ref[colname] for colname in colnames_band)
-                        )
+                        paramvals_ref[colname_flux] = sum(paramvals_ref[colname] for colname in colnames_band)
                     results_dict[colname_flux] = total
                     if plot_total_fluxes:
                         target.append(colname_flux)

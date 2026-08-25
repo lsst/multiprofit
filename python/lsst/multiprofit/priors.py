@@ -21,9 +21,10 @@
 
 __all__ = ["ShapePriorConfig", "get_hst_size_prior"]
 
+import numpy as np
+
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig
-import numpy as np
 
 from .transforms import transforms_ref
 

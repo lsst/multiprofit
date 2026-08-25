@@ -21,25 +21,27 @@
 
 __all__ = [
     "CatalogExposurePsfABC",
+    "CatalogPsfFitter",
     "CatalogPsfFitterConfig",
     "CatalogPsfFitterConfigData",
-    "CatalogPsfFitter",
 ]
 
-from abc import abstractmethod
-from functools import cached_property
 import logging
 import math
 import time
-from typing import Any, ClassVar, Mapping, Type
+from abc import abstractmethod
+from collections.abc import Mapping
+from functools import cached_property
+from typing import Any, ClassVar
 
 import astropy
+import numpy as np
+import pydantic
+
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig
 from lsst.utils.logging import PeriodicLogger
-import numpy as np
-import pydantic
 
 from ..componentconfig import (
     Fluxes,
@@ -394,7 +396,7 @@ class CatalogPsfFitter:
     def __init__(
         self,
         modeller: Modeller | None = None,
-        errors_expected: dict[Type[Exception], str] | None = None,
+        errors_expected: dict[type[Exception], str] | None = None,
     ):
         if modeller is None:
             modeller = Modeller()

@@ -19,6 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import numpy as np
+import pytest
+
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit.componentconfig import (
     GaussianComponentConfig,
@@ -28,18 +31,18 @@ from lsst.multiprofit.componentconfig import (
 )
 from lsst.multiprofit.sourceconfig import ComponentGroupConfig, SourceConfig
 from lsst.multiprofit.utils import get_params_uniq
-import numpy as np
-import pytest
 
 
 @pytest.fixture(scope="module")
 def centroid_limits():
+    """Return trivial limits for centroids."""
     limits = g2f.LimitsD(min=-np.inf, max=np.inf)
     return limits
 
 
 @pytest.fixture(scope="module")
 def centroid(centroid_limits):
+    """Return centroid parameters with trivial limits."""
     cenx = g2f.CentroidXParameterD(0, limits=centroid_limits, fixed=True)
     ceny = g2f.CentroidYParameterD(0, limits=centroid_limits, fixed=True)
     centroid = g2f.CentroidParameters(cenx, ceny)
@@ -48,10 +51,17 @@ def centroid(centroid_limits):
 
 @pytest.fixture(scope="module")
 def channels():
+    """Return dict of generic RGB channels."""
     return {band: g2f.Channel.get(band) for band in ("R", "G", "B")}
 
 
 def test_ComponentGroupConfig(centroid):
+    """Test that ComponentGroupConfig initializes correctly."""
+    config = ComponentGroupConfig(
+        components_gauss={"x": GaussianComponentConfig()},
+        components_sersic={"y": SersicComponentConfig()},
+    )
+    config.validate()
     with pytest.raises(ValueError):
         config = ComponentGroupConfig(
             components_gauss={"x": GaussianComponentConfig()},
@@ -61,6 +71,12 @@ def test_ComponentGroupConfig(centroid):
 
 
 def test_SourceConfig_base():
+    """Test that SourceConfig initializes correctly."""
+    config = SourceConfig(
+        component_groups={"": ComponentGroupConfig(components_gauss={"": GaussianComponentConfig()})}
+    )
+    config.validate()
+
     with pytest.raises(ValueError):
         config = SourceConfig()
         config.validate()
@@ -71,6 +87,7 @@ def test_SourceConfig_base():
 
 
 def test_SourceConfig_fractional(centroid):
+    """Test that SourceConfig works with fractional ComponentGroup."""
     rho, size_x, size_y = -0.3, 1.4, 1.6
     drho, dsize_x, dsize_y = 0.5, 1.6, 1.3
 
@@ -105,6 +122,7 @@ def test_SourceConfig_fractional(centroid):
 
 
 def test_SourceConfig_linear(centroid, channels):
+    """Test that SourceConfig works with a regular (linear) ComponentGroup."""
     rho, size_x, size_y, sersicn, flux = 0.4, 1.5, 1.9, 0.5, 4.7
     drho, dsize_x, dsize_y, dsersicn, dflux = -0.9, 2.5, 5.4, 2.8, 13.9
 

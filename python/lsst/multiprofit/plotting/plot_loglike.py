@@ -23,9 +23,10 @@ __all__ = ["plot_loglike"]
 
 import itertools
 
-import lsst.gauss2d.fit as g2f
 import matplotlib.pyplot as plt
 import numpy as np
+
+import lsst.gauss2d.fit as g2f
 
 from ..utils import get_params_uniq
 from .config import linestyles_default

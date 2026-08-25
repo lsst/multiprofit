@@ -22,6 +22,9 @@
 import math
 import time
 
+import numpy as np
+import pytest
+
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit.componentconfig import (
@@ -39,19 +42,19 @@ from lsst.multiprofit.modeller import FitInputs, LinearGaussians, Modeller, fit_
 from lsst.multiprofit.observationconfig import CoordinateSystemConfig, ObservationConfig
 from lsst.multiprofit.sourceconfig import ComponentGroupConfig, SourceConfig
 from lsst.multiprofit.utils import get_params_uniq
-import numpy as np
-import pytest
 
 sigma_inv = 1e4
 
 
 @pytest.fixture(scope="module")
 def channels() -> dict[str, g2f.Channel]:
+    """Return dict of generic RGB channels."""
     return {band: g2f.Channel.get(band) for band in ("R", "G", "B")}
 
 
 @pytest.fixture(scope="module")
 def data(channels) -> g2f.DataD:
+    """Return initialized data in all bands."""
     n_rows, n_cols = 25, 27
     x_min, y_min = 0, 0
 
@@ -79,6 +82,7 @@ def data(channels) -> g2f.DataD:
 
 @pytest.fixture(scope="module")
 def psf_models(channels) -> list[g2f.PsfModel]:
+    """Return a double Gaussian PSF model for each band."""
     rho, size_x, size_y = 0.12, 1.6, 1.2
     drho, dsize_x, dsize_y = -0.3, 1.1, 1.9
     drho_chan, dsize_x_chan, dsize_y_chan = 0.03, 0.12, 0.14
@@ -135,6 +139,7 @@ def psf_models(channels) -> list[g2f.PsfModel]:
 
 @pytest.fixture(scope="module")
 def model(channels, data, psf_models) -> g2f.ModelD:
+    """Return the configured model."""
     rho, size_x, size_y, sersicn, flux = 0.4, 1.5, 1.9, 1.0, 4.7
     drho, dsize_x, dsize_y, dsersicn, dflux = -0.9, 2.5, 5.4, 3.0, 13.9
 
@@ -202,12 +207,14 @@ def model(channels, data, psf_models) -> g2f.ModelD:
 
 @pytest.fixture
 def model_func_scope(model) -> g2f.ModelD:
+    """Return a shallow copy of the configured model."""
     model_func_scope = g2f.ModelD(data=model.data, psfmodels=model.psfmodels, sources=model.sources)
     return model_func_scope
 
 
 @pytest.fixture(scope="module")
 def psf_observations(psf_models) -> list[g2f.ObservationD]:
+    """Return the PSF model observations for each band."""
     config = ObservationConfig(n_rows=17, n_cols=19)
     rng = np.random.default_rng(1)
 
@@ -239,6 +246,7 @@ def psf_observations(psf_models) -> list[g2f.ObservationD]:
 
 @pytest.fixture(scope="module")
 def psf_fit_models(psf_models, psf_observations):
+    """Return initialized models for each band's PSF."""
     psf_null = [make_psf_model_null()]
     return [
         g2f.ModelD(g2f.DataD([observation]), psf_null, [g2f.Source(psf_model.components)])
@@ -247,6 +255,7 @@ def psf_fit_models(psf_models, psf_observations):
 
 
 def test_model_evaluation(channels, model, model_func_scope):
+    """Test that each kind of model evaluation works correctly."""
     with pytest.raises(RuntimeError):
         model_func_scope.evaluate()
 
@@ -323,6 +332,7 @@ def test_model_evaluation(channels, model, model_func_scope):
 
 @pytest.fixture(scope="module")
 def psf_models_linear_gaussians(channels, psf_models):
+    """Return individual Gaussians for each PSF model."""
     gaussians = [None] * len(psf_models)
     for idx, psf_model in enumerate(psf_models):
         params = psf_model.parameters(paramfilter=g2f.ParamFilter(nonlinear=False, channel=g2f.Channel.NONE))
@@ -334,6 +344,7 @@ def psf_models_linear_gaussians(channels, psf_models):
 
 
 def test_make_psf_source_linear(psf_models, psf_models_linear_gaussians):
+    """Test that the list of PSF Gaussians matches the model."""
     for psf_model, linear_gaussians in zip(psf_models, psf_models_linear_gaussians):
         gaussians = psf_model.gaussians(g2f.Channel.NONE)
         assert len(gaussians) == (
@@ -342,6 +353,7 @@ def test_make_psf_source_linear(psf_models, psf_models_linear_gaussians):
 
 
 def test_modeller(model):
+    """Test that Modellers can fit models and return sensible values."""
     # For debugging purposes
     printout = False
     # Force to ensure test-order independence
@@ -459,6 +471,7 @@ def test_modeller(model):
 
 
 def test_psf_model_fit(psf_fit_models):
+    """Test that the PSF models evaluate correctly."""
     for model in psf_fit_models:
         params = get_params_uniq(model.sources[0])
         params_freed = set()
@@ -509,6 +522,9 @@ def test_psf_model_fit(psf_fit_models):
 
 
 def test_psf_models_linear_gaussians(data, psf_models_linear_gaussians, psf_observations):
+    """Test that PSF model linear Gaussians can be used for least squares
+    fitting.
+    """
     results = [None] * len(psf_observations)
     for idx, (gaussians_linear, observation_psf) in enumerate(
         zip(psf_models_linear_gaussians, psf_observations)
@@ -523,6 +539,7 @@ def test_psf_models_linear_gaussians(data, psf_models_linear_gaussians, psf_obse
 
 
 def test_modeller_fit_linear(model):
+    """Test that a Modeller can do linear fitting."""
     modeller = Modeller()
     params = get_params_uniq(model)
     params_linear_free = {}

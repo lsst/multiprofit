@@ -19,6 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import numpy as np
+import pytest
+
 import lsst.gauss2d as g2
 import lsst.gauss2d.fit as g2f
 from lsst.multiprofit.componentconfig import (
@@ -31,17 +34,17 @@ from lsst.multiprofit.componentconfig import (
 from lsst.multiprofit.modelconfig import ModelConfig
 from lsst.multiprofit.observationconfig import ObservationConfig
 from lsst.multiprofit.sourceconfig import ComponentGroupConfig, SourceConfig
-import numpy as np
-import pytest
 
 
 @pytest.fixture(scope="module")
 def channels() -> dict[str, g2f.Channel]:
+    """Return dict of generic RGB channels."""
     return {band: g2f.Channel.get(band) for band in ("R", "G", "B")}
 
 
 @pytest.fixture(scope="module")
 def data(channels) -> g2f.DataD:
+    """Return initialized data in all bands."""
     config = ObservationConfig(n_rows=13, n_cols=19)
     observations = []
     for band in channels:
@@ -52,6 +55,7 @@ def data(channels) -> g2f.DataD:
 
 @pytest.fixture(scope="module")
 def psf_model():
+    """Return a triple Gaussian PSF model."""
     rho, size_x, size_y = 0.25, 1.6, 1.2
     drho, dsize_x, dsize_y = -0.4, 1.1, 1.9
 
@@ -85,11 +89,13 @@ def psf_model():
 
 @pytest.fixture(scope="module")
 def psf_models(psf_model, channels) -> list[g2f.PsfModel]:
+    """Return a list of PSF models per channel."""
     return [psf_model] * len(channels)
 
 
 @pytest.fixture(scope="module")
 def modelconfig_fluxes(channels):
+    """Return model configs and flux values."""
     rho, size_x, size_y, sersicn, flux = 0.4, 1.5, 1.9, 0.5, 4.7
     drho, dsize_x, dsize_y, dsersicn, dflux = -0.9, 2.5, 5.4, 2.8, 13.9
 
@@ -132,6 +138,7 @@ def modelconfig_fluxes(channels):
 
 
 def test_ModelConfig(modelconfig_fluxes, data, psf_models):
+    """Test ModelConfig init and funcs."""
     modelconfig, fluxes = modelconfig_fluxes
     model = modelconfig.make_model([[fluxes]], data=data, psf_models=psf_models)
     assert model is not None

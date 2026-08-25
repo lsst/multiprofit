@@ -19,17 +19,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["CatalogExposureABC", "ColumnInfo", "CatalogFitterConfig"]
+__all__ = ["CatalogExposureABC", "CatalogFitterConfig", "ColumnInfo"]
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from typing import ClassVar
 
-from astropy.table import Table
 import astropy.units as u
-import lsst.pex.config as pexConfig
 import numpy as np
 import pydantic
+from astropy.table import Table
+
+import lsst.pex.config as pexConfig
 
 from ..componentconfig import GaussianComponentConfig, SersicComponentConfig
 from ..modeller import ModelFitConfig
@@ -261,7 +262,7 @@ class CatalogFitterConfig(pexConfig.Config):
 
         idx_flag_first = keys.index("unknown_flag")
         idx_flag_last = idx_flag_first + len(self.flag_errors)
-        dtypes = [(f'{prefix if col.key != self.column_id else ""}{col.key}', col.dtype) for col in columns]
+        dtypes = [(f"{prefix if col.key != self.column_id else ''}{col.key}", col.dtype) for col in columns]
 
         results = Table(np.empty(n_rows, dtype=dtypes))
         for colname in results.colnames:

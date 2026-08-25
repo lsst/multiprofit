@@ -22,7 +22,7 @@
 __all__ = ["ModelConfig"]
 
 import string
-from typing import Iterable
+from collections.abc import Iterable
 
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig

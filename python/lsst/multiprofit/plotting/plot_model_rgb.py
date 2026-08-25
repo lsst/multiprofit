@@ -25,11 +25,12 @@ import math
 from typing import Any
 
 import astropy.visualization as apVis
-import lsst.gauss2d as g2
-import lsst.gauss2d.fit as g2f
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+
+import lsst.gauss2d as g2
+import lsst.gauss2d.fit as g2f
 
 from .types import Axes, Figure
 
