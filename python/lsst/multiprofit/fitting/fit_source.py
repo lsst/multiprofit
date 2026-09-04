@@ -49,6 +49,7 @@ __all__ = [
     "CatalogSourceFitterABC",
     "CatalogSourceFitterConfig",
     "CatalogSourceFitterConfigData",
+    "ObservationSelectionConfig",
 ]
 
 
@@ -102,6 +103,12 @@ class CatalogExposureSourcesABC(CatalogExposureABC):
             An Observation object with suitable data for fitting parametric
             models of the source, or None if the observation cannot be fit.
         """
+
+
+class ObservationSelectionConfig(pexConfig.Config):
+    """Configuration for selecting observations by their properties."""
+
+    indices = pexConfig.ListField[int](doc="Indices of the observations to select")
 
 
 class CatalogSourceFitterConfig(CatalogFitterConfig):
