@@ -32,6 +32,7 @@ def plot_model_singleband(
     model: g2f.ModelD,
     idx_obs: int,
     percentile_scaling: float = 98.0,
+    sigma_max: float = 10,
 ) -> tuple[Figure, Axes]:
     """Plot a model and its residuals compared to a single observation.
 
@@ -74,9 +75,9 @@ def plot_model_singleband(
     ax[0][1].set_title(f"{band}-band Model")
     ax[1][0].imshow(np.arcsinh((img_data - img_model) / value_max), cmap="gray", origin="lower")
     ax[1][0].tick_params(labelleft=False)
-    ax[1][0].set_title(f"{band}-band Residual")
-    ax[1][1].imshow((img_data - img_model) * obs.sigma_inv.data, cmap="gray", origin="lower")
+    ax[1][0].set_title(f"{band}-band Residual (D-M)")
+    ax[1][1].imshow((img_data - img_model) * obs.sigma_inv.data, vmin=-sigma_max, vmax=sigma_max, cmap="gray", origin="lower")
     ax[1][1].tick_params(labelleft=False)
-    ax[1][1].set_title(f"{band}-band Residual")
+    ax[1][1].set_title(f"{band}-band Residual (D-M)/sigma +/- {sigma_max:.2f}")
 
     return fig, ax
