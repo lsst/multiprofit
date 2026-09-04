@@ -50,7 +50,11 @@ from lsst.multiprofit.fitting.fit_psf import (
     CatalogPsfFitterConfig,
     CatalogPsfFitterConfigData,
 )
-from lsst.multiprofit.fitting.fit_source import CatalogSourceFitterConfig, CatalogSourceFitterConfigData
+from lsst.multiprofit.fitting.fit_source import (
+    CatalogSourceFitterConfig,
+    CatalogSourceFitterConfigData,
+    ObservationSelectionConfig,
+)
 from lsst.multiprofit.modelconfig import ModelConfig
 from lsst.multiprofit.modeller import ModelFitConfig
 from lsst.multiprofit.observationconfig import CoordinateSystemConfig
@@ -280,6 +284,9 @@ def test_fit_source(channels, config_fitter_source, config_data_sources):
         assert np.all(results[f"mpf_{conversion_error_key}"] == 1)
 
     config_fitter_source.config.convert_cen_xy_to_radec = False
+    config_fitter_source.config.fit_centroids_init = {
+        "mpf": ObservationSelectionConfig(indices=[0]),
+    }
     schema = config_fitter_source.config.schema(tuple(channels.keys()))
     results = fitter.fit(catalog_multi=catalog_multi, catexps=catexps, config_data=config_fitter_source)
 
