@@ -32,6 +32,7 @@ import numpy as np
 import pydantic
 from astropy.table import Table
 
+import lsst.gauss2d as g2d
 import lsst.gauss2d.fit as g2f
 import lsst.pex.config as pexConfig
 from lsst.utils.logging import PeriodicLogger
@@ -143,6 +144,10 @@ class CatalogSourceFitterConfig(CatalogFitterConfig):
         " Only effective if convert_cen_xy_to_radec and compute_errors is not NONE, and requires that the"
         " overloaded compute_model_radec_err method sets RA/dec values itself.",
         default=False,
+    )
+    fit_centroids_init = pexConfig.ConfigDictField[str, ObservationSelectionConfig](
+        default={},
+        doc="Labels of centroid parameters to fit after initialization",
     )
     fit_psmodel_final = pexConfig.Field[bool](
         default=False,
@@ -881,8 +886,13 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         columns_param_flux: dict[str, g2f.IntegralParameterD] = {}
         params_cen_x: dict[str, g2f.CentroidXParameterD] = {}
         params_cen_y: dict[str, g2f.CentroidYParameterD] = {}
+        params_cen_init: dict[str, g2f.ParameterD] = {}
+        params_non_cen: dict[str, g2f.ParameterD] = {}
         values_init_to_store: dict[str, g2f.ParameterD] = {}
         columns_err = []
+
+        fit_centroids_init = len(config.fit_centroids_init) > 0
+        fit_linear_init = config.fit_linear_init
 
         errors_hessian: bool = config.compute_errors == "INV_HESSIAN"
         errors_hessian_bestfit: bool = config.compute_errors == "INV_HESSIAN_BESTFIT"
@@ -900,14 +910,14 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         param_scale_factors = {}
         centroid_scale_factor = config.centroid_scale_factor
 
+        prefixes_cen_found = {}
+
         # Add each param to appropriate and more specific pre-computed lists
         for key, param in params.items():
             key_full = f"{prefix}{key}"
             is_cenx = isinstance(param, g2f.CentroidXParameterD)
             is_ceny = isinstance(param, g2f.CentroidYParameterD)
-
-            if is_cenx or is_ceny:
-                param_scale_factors[param] = centroid_scale_factor
+            is_cen = is_cenx or is_ceny
 
             # Add the corresponding error key to the appropriate list
             if compute_errors:
@@ -922,13 +932,14 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
             # Add this param to the appropriate dict
             (columns_param_fixed if param.fixed else columns_param_free)[key_full] = (
                 param,
-                offset_cen if (is_cenx or is_ceny) else 0,
+                offset_cen if is_cen else 0,
             )
             if isinstance(param, g2f.IntegralParameterD):
                 columns_param_flux[key_full] = param
             if is_cen:
                 # Infer the prefix if possible, after checking for a dropped
                 # leading underscore in case there's no prefix
+                param_scale_factors[param] = centroid_scale_factor
                 params_cen, suffix_cen = (
                     (params_cen_x, suffix_cenx) if is_cenx else (params_cen_y, suffix_ceny)
                 )
@@ -938,8 +949,25 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                     else key_full.split(suffix_cen)
                 )
                 params_cen[prefix_cen] = param
-                if config.store_initial_centroid_values:
-                    values_init_to_store[f"{key_full}_init"] = param
+
+                if fit_centroids_init:
+                    prefixes_cen_found[prefix_cen] = None
+                    if prefix_cen in config.fit_centroids_init:
+                        params_cen_init[key_full] = param
+                    else:
+                        params_non_cen[key_full] = param
+                if config.convert_cen_xy_to_radec or config.store_initial_centroid_values:
+                    if config.store_initial_centroid_values:
+                        values_init_to_store[f"{key_full}_init"] = param
+            elif param.free:
+                if fit_centroids_init:
+                    params_non_cen[key_full] = param
+
+        if fit_centroids_init and (len(params_cen_init) == 0):
+            raise ValueError(
+                f"Found no centroid parameters to fit with {config.fit_centroids_init=}. Ensure that at"
+                f" least one key from {list(prefixes_cen_found.keys())} is present in the config dict."
+            )
 
         if config.convert_cen_xy_to_radec or config.fit_psmodel_final:
             assert params_cen_x.keys() == params_cen_y.keys()
@@ -1008,6 +1036,7 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
         # dummy size for first iteration
         size, size_new = 0, 0
         fitInputs = FitInputsDummy()
+        fitInputs_cen_only = FitInputsDummy()
         plot = False
 
         # Configure default options for calls to compute_variances
@@ -1066,15 +1095,68 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
                 size_new = np.sum([datum.image.size for datum in data])
                 if size_new != size:
                     fitInputs = None
+                    fitInputs_cen_only = None
                     size = size_new
                 # Some algorithms might not even use fitInputs
                 elif fitInputs is not None:
                     fitInputs = fitInputs if not fitInputs.validate_for_model(model) else None
+                    if fit_centroids_init:
+                        fitInputs_cen_only = (
+                            fitInputs_cen_only if not (fitInputs_cen_only.validate_for_model(model)) else None
+                        )
 
                 # TODO: Check if flux param limits and transforms are set
                 # appropriately if config.fit_linear_init is False
-                if config.fit_linear_init:
+                if fit_linear_init:
                     self.modeller.fit_model_linear(model=model, ratio_min=0.01)
+
+                if fit_centroids_init:
+                    fit_linear_iter = config.config_fit.fit_linear_iter
+                    for param in params_non_cen.values():
+                        param.free = False
+                    # TODO: Figure out how to check if there are any priors
+                    # that are centroid-only and can be kept.
+                    model_init = g2f.ModelD(
+                        data=g2f.DataD(
+                            [
+                                g2f.ObservationD(
+                                    g2d.ImageD(data[idx].image.data, coordsys=data[idx].image.coordsys),
+                                    g2d.ImageD(
+                                        data[idx].sigma_inv.data, coordsys=data[idx].sigma_inv.coordsys
+                                    ),
+                                    g2d.ImageB(data[idx].mask_inv.data, coordsys=data[idx].mask_inv.coordsys),
+                                    data[idx].channel,
+                                )
+                                for obs_config in config.fit_centroids_init.values()
+                                for idx in obs_config.indices
+                            ]
+                        ),
+                        psfmodels=[
+                            psf_models[idx]
+                            for obs_config in config.fit_centroids_init.values()
+                            for idx in obs_config.indices
+                        ],
+                        sources=model_sources,
+                    )
+                    config.config_fit.fit_linear_iter = 0
+                    result_init = self.modeller.fit_model(
+                        model_init,
+                        fitinputs=fitInputs_cen_only,
+                        config=config.config_fit,
+                        param_scale_factors=param_scale_factors,
+                        **kwargs,
+                    )
+                    for param, value in zip(
+                        params_cen_init.values(),
+                        result_init.params_best,
+                    ):
+                        param.value_transformed = value
+                    fitInputs_cen_only = result_init.inputs
+                    config.config_fit.fit_linear_iter = fit_linear_iter
+                    for param in params_non_cen.values():
+                        param.free = True
+                    if config.fit_linear_init:
+                        self.modeller.fit_model_linear(model=model, ratio_min=0.01)
 
                 for observation in data:
                     observation.image.data[~np.isfinite(observation.image.data)] = 0
@@ -1097,11 +1179,16 @@ class CatalogSourceFitterABC(ABC, pydantic.BaseModel):
 
                 # Set all params to best fit values
                 # In case the optimizer doesn't
-                for (key, (param, offset)), value in zip(
-                    columns_param_free.items(),
+                for param, value in zip(
+                    result_full.params,
                     result_full.params_best,
                 ):
                     param.value_transformed = value
+
+                # Set table values. Note although columns_params_free should
+                # be the same as results_full, chromatic centroid parameters
+                # can break this assumption
+                for key, (param, offset) in columns_param_free.items():
                     if param not in params_free_missing:
                         results[key][idx] = param.value + offset
 
