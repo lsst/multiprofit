@@ -78,7 +78,7 @@ def plot_catalog_bootstrap(
     # However, it would be useful to get the band and component name (if any)
     # given a formatted flux (error) column key
     config_dict["config_model"] = ModelConfig().toDict()
-    set_config_from_dict(config, config_dict)
+    set_config_from_dict(config, config_dict, initialize_none=True)
     prefix = config.prefix_column
     suffix_err = config.suffix_error
     len_suffix_err = len(suffix_err)
