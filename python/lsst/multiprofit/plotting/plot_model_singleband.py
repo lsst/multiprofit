@@ -21,9 +21,10 @@
 
 __all__ = ["plot_model_singleband"]
 
-import lsst.gauss2d.fit as g2f
 import matplotlib.pyplot as plt
 import numpy as np
+
+import lsst.gauss2d.fit as g2f
 
 from .types import Axes, Figure
 
@@ -83,7 +84,10 @@ def plot_model_singleband(
     ax[1][0].set_title(f"{band}-band Residual (data-model)")
     ax[1][1].imshow(
         (img_data - img_model) * obs.sigma_inv.data,
-        vmin=-sigma_max, vmax=sigma_max, cmap="gray", origin="lower",
+        vmin=-sigma_max,
+        vmax=sigma_max,
+        cmap="gray",
+        origin="lower",
     )
     ax[1][1].tick_params(labelleft=False)
     ax[1][1].set_title(f"{band}-band Residual ((data-model)/σ +/- {sigma_max:.2f}")

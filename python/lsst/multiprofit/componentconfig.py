@@ -30,8 +30,8 @@ __all__ = [
     "GaussianComponentConfig",
     "MultiChannelCentroidConfig",
     "ParameterConfig",
-    "SersicIndexParameterConfig",
     "SersicComponentConfig",
+    "SersicIndexParameterConfig",
     "SersicIndexParameterConfig",
 ]
 

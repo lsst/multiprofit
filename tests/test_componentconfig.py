@@ -59,6 +59,7 @@ def channels():
 
 
 def test_ChannelGroupCentroidConfig():
+    """Test that channel groups work."""
     config = ChannelGroupCentroidConfig(achromatic=True)
     config_cen = MultiChannelCentroidConfig()
     with pytest.raises(pexConfig.FieldValidationError):

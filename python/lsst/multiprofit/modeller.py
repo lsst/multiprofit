@@ -1066,7 +1066,7 @@ class Modeller:
             else:
                 # The initial evaluate will fill in jac for the next line
                 # _ll_init is assigned just for convenient debugging
-                _ll_init = model.evaluate(print=printout)  # noqa: F841
+                _ll_init = model.evaluate(print=printout)
                 x_scale_jac_clipped = np.clip(
                     param_x_scale_factors / (np.sum(jac**2, axis=0) ** 0.5), 1e-5, 1e19
                 )
