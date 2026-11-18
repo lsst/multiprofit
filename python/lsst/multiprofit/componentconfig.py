@@ -474,7 +474,7 @@ class SersicComponentConfig(EllipticalComponentConfig):
     }
     _size_label = "reff"
 
-    order = pexConfig.ChoiceField[int](doc="Sersic mix order", allowed={4: "Four", 8: "Eight"}, default=4)
+    order = pexConfig.ChoiceField[int](doc="Sersic mix order", allowed={4: "Four", 8: "Eight"}, default=8)
     sersic_index = pexConfig.ConfigField[SersicIndexParameterConfig](doc="Sersic index config")
 
     def get_interpolator(self, order: int) -> g2f.SersicMixInterpolator:
