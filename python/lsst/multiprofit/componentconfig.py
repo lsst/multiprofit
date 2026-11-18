@@ -453,6 +453,13 @@ class SersicIndexParameterConfig(ParameterConfig):
                 raise ValueError("Sersic index prior std. dev. must be > 0")
 
 
+_interpolator_class_default = (
+    g2f.GSLSersicMixInterpolator
+    if hasattr(g2f, "GSLSersicMixInterpolator")
+    else g2f.LinearSersicMixInterpolator
+)
+
+
 class SersicComponentConfig(EllipticalComponentConfig):
     """Configuration for an lsst.gauss2d.fit Sersic component.
 
@@ -463,41 +470,48 @@ class SersicComponentConfig(EllipticalComponentConfig):
     or an `lsst.gauss2d.fit.SersicMixComponent` otherwise.
     """
 
-    _interpolator_class_default = (
-        g2f.GSLSersicMixInterpolator
-        if hasattr(g2f, "GSLSersicMixInterpolator")
-        else g2f.LinearSersicMixInterpolator
-    )
-    _interpolators: dict[int, g2f.SersicMixInterpolator] = {
-        4: _interpolator_class_default(4),
-        8: _interpolator_class_default(8),
+    _interpolator_class_default = _interpolator_class_default
+    _interpolators: dict[int, dict[str, g2f.SersicMixInterpolator]] = {
+        order: {
+            version: _interpolator_class_default(order=order, version=version) for version in ("1.0", "2.0")
+        }
+        for order in (4, 8)
     }
     _size_label = "reff"
 
     order = pexConfig.ChoiceField[int](doc="Sersic mix order", allowed={4: "Four", 8: "Eight"}, default=8)
     sersic_index = pexConfig.ConfigField[SersicIndexParameterConfig](doc="Sersic index config")
+    version = pexConfig.ChoiceField[str](
+        doc="Mixture parameter version",
+        allowed={"2.0": "Version 2.0 (exact integral-based)", "1.0": "Version 1.0 (numeric integral-based)"},
+        default="1.0",
+    )
 
-    def get_interpolator(self, order: int) -> g2f.SersicMixInterpolator:
+    def get_interpolator(self, order: int, version: str | None = None) -> g2f.SersicMixInterpolator:
         """Get the best available interpolator for a given order.
 
         Parameters
         ----------
         order
             The order of the desired interpolator.
+        version
+            The version of the Sersic mixture.
 
         Returns
         -------
         interpolator
             An interpolator of the requested order.
         """
-        return self._interpolators.get(
-            order,
-            (
-                g2f.GSLSersicMixInterpolator
-                if hasattr(g2f, "GSLSersicMixInterpolator")
-                else g2f.LinearSersicMixInterpolator
-            )(order=order),
-        )
+        if version is None:
+            version = SersicComponentConfig.version.default
+        if (order_version := self._interpolators.get(order)) is not None:
+            if (version_interp := order_version.get(version)) is not None:
+                return version_interp
+        return (
+            g2f.GSLSersicMixInterpolator
+            if hasattr(g2f, "GSLSersicMixInterpolator")
+            else g2f.LinearSersicMixInterpolator
+        )(order=order, version=version)
 
     def get_size_label(self) -> str:
         return self._size_label
@@ -540,7 +554,7 @@ class SersicComponentConfig(EllipticalComponentConfig):
                 value=self.sersic_index.value_initial,
                 fixed=self.sersic_index.fixed,
                 transform=transforms_ref["logit_sersic"] if not self.sersic_index.fixed else None,
-                interpolator=self.get_interpolator(order=self.order),
+                interpolator=self.get_interpolator(order=self.order, version=self.version),
                 limits=limits_ref["n_ser_multigauss"],
             )
             component = g2f.SersicMixComponent(
